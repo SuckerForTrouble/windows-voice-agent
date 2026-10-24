@@ -108,6 +108,7 @@ section h2{margin:0;font-size:18px}section p.i{margin:2px 0 10px;color:var(--sof
 .recent li{list-style:none;padding:4px 0;border-top:1px solid var(--line)}.recent ul{padding:0;margin:0}
 .ok{color:var(--ok)}.bad{color:var(--bad)}.t{color:var(--soft);font-size:12.5px;margin-right:8px}
 .hide{display:none}footer{color:var(--soft);font-size:13px;text-align:center;margin-top:30px}
+.credit{color:var(--soft);opacity:.6;font-size:11px;text-align:center;margin-top:6px}
 </style></head><body>
 <header><h1>🎙️ {{APP}}: what you can say</h1>
 <div class="sub">Version {{VERSION}} · everything here is checked to work · type below to filter</div></header>
@@ -128,6 +129,7 @@ section h2{margin:0;font-size:18px}section p.i{margin:2px 0 10px;color:var(--sof
 <div class="r"><div class="say">Hears the wrong words</div><div class="d">Use the export-for-AI steps above. Or speak a little slower and closer to the mic, and pick the right mic in the tray menu.</div></div>
 </section>
 <footer>{{APP}} {{VERSION}} · it updates itself · tray icon → Check for updates</footer>
+<div class="credit">made by profane for Billa Janta Party</div>
 </main>
 <script>
 const D={{DATA}};const G=document.getElementById("groups"),N=document.getElementById("nav"),Q=document.getElementById("q");

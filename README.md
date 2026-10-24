@@ -129,3 +129,5 @@ python3 -m wva --list                      # every command
 | `wva/stt.py` | whisper-server (Vulkan GPU build, CPU fallback), model download |
 | `wva/guide.py`, `checkup.py`, `tuning.py` | voice guide, setup check, AI tuning export/import |
 | `wva/updater.py`, `installer/wva.iss` | self-update from GitHub releases, the installer |
+
+<p align="center"><sub>made by profane for Billa Janta Party</sub></p>

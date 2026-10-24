@@ -231,12 +231,14 @@ table{{width:100%;border-collapse:collapse;background:var(--card);border:1px sol
 td{{padding:12px 14px;border-top:1px solid var(--line);vertical-align:top}}tr:first-child td{{border-top:0}}
 td.s{{width:34px;font-size:20px;font-weight:700;text-align:center}}.ok td.s{{color:var(--ok)}}.warn td.s{{color:var(--warn)}}.fail td.s{{color:var(--fail)}}
 .d{{color:var(--soft);font-size:14px}}.f{{margin-top:4px;font-size:14px}}.next{{margin-top:22px;background:var(--card);border:1px solid var(--line);border-radius:14px;padding:16px 18px}}
+.credit{{color:var(--soft);opacity:.6;font-size:11px;text-align:center;margin-top:26px}}
 kbd{{border:1px solid var(--line);border-bottom-width:2px;border-radius:6px;padding:1px 7px;font:600 13px Consolas,monospace}}
 </style></head><body><main>
 <h1>🩺 Setup check</h1><div class="sub">{APP_NAME} {__version__} · {n_ok} of {len(results)} fine · {time.strftime('%d %b %Y %H:%M')}</div>
 <table>{rows}</table>
 <div class="next"><b>Next:</b> hold <kbd>{config.get('agent_key').upper()}</kbd>, say <i>"what can I say"</i>, let go. That opens the voice guide.
 Fixed something above? Say <i>"check my setup"</i> again.</div>
+<div class="credit">made by profane for Billa Janta Party</div>
 </main></body></html>"""
 
 
