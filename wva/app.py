@@ -63,6 +63,7 @@ class App:
         self.last_used = 0.0
         self.told_game = ""
         self.first_run = not paths.CONFIG.exists()
+        osd.level_source = lambda: self.rec.level  # the pill's mic meter
 
     # ------------------------------------------------------------- start-up
     def start(self, icon):
@@ -243,6 +244,14 @@ class App:
     def _ready_again(self):
         self.tray.set("ready", self._ready_text())
 
+    def _engine_name(self):
+        """'Parakeet on GPU' / 'Best on CPU' / 'Groq', for the pill's footer."""
+        s = self.stt
+        if s.backend == "cloud":
+            return s.device
+        name = speech.MODELS.get(s.model, (s.model,))[0].split(":")[0]
+        return f"{name} on {'GPU' if s.backend == 'vulkan' else 'CPU'}"
+
     def _language(self, mode):
         """Commands are English; the typing key types in the chosen language (.en models only know English)."""
         lang = config.get("dictate_language") if mode == "dictate" else config.get("language")
@@ -292,13 +301,11 @@ class App:
         if not steps:
             history.record(via="agent", heard=heard, clean=engine.clean(text), result="unmatched")
             beep("error")
-            osd.show(f"Didn't understand: “{heard}”", "error", 3.5)
+            osd.show(heard, "error", 3.5, title="Didn't understand", footer="say “what can I say” for ideas")
             return
-        chips = " → ".join((s[:1].upper() + s[1:])[:40] for _, _, s in steps)
-        pill = f"“{heard}”   ✓ {chips}" if len(steps) > 1 or len(heard) > 40 else f"✓ {heard}"
-        if took is not None and config.get("show_timing"):
-            pill += f"   ·   {took:.1f} s"
-        osd.show(pill, "ok", 2.5)
+        chips = [(s[:1].upper() + s[1:])[:40] for _, _, s in steps]
+        footer = f"{took:.1f} s · {self._engine_name()}" if took is not None else self._engine_name()
+        osd.show(heard, "ok", 2.5, chips=chips, footer=footer)
         errors = []
         for i, (r, groups, _) in enumerate(steps):
             try:
@@ -306,7 +313,7 @@ class App:
             except Exception as e:
                 log.exception("%s failed", r.say)
                 errors.append(f"{r.say}: {e}")
-                osd.show(f"{r.say}: {e}", "error", 5)
+                osd.show(f"{r.say}: {e}", "error", 5, title="Problem")
             if i + 1 < len(steps):
                 time.sleep(r.after)
         history.record(via="agent", heard=heard, clean=engine.clean(text), steps=[r.say for r, _, _ in steps],

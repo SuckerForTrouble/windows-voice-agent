@@ -17,6 +17,7 @@ DEFAULTS = {
     "mic": "",               # part of the microphone's name; empty = the Windows default mic
     "sounds": True,          # start/stop beeps
     "osd": True,             # the little "heard: …" pill at the top of the screen
+    "osd_style": "minimal",  # minimal | advanced | funky (tray → Optional features → Pill style)
     "voice_replies": False,  # answers (time, weather…) read out loud as well as shown (opt-in)
     "show_timing": False,    # the pill says how long each command took (opt-in)
     "unload_in_games": True,  # a game starts: the speech model leaves graphics memory until you press the key

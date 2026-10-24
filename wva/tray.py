@@ -6,7 +6,7 @@ import os
 
 import pystray
 
-from . import APP_NAME, config, paths, state, stt
+from . import APP_NAME, config, osd, paths, state, stt
 from .icon import icon_image
 
 
@@ -108,6 +108,9 @@ class Tray:
         return pystray.Menu(
             M("Spoken answers (time, weather…)", self._toggle("voice_replies"), checked=self._checked("voice_replies")),
             M("On-screen pill", self._toggle("osd"), checked=self._checked("osd")),
+            M("Pill style", pystray.Menu(*[
+                M(label, self._set("osd_style", sid, lambda sid=sid: osd.show(f"Pill style: {osd.STYLES[sid]}", "ok", 3)),
+                  checked=self._is("osd_style", sid), radio=True) for sid, label in osd.STYLES.items()])),
             M("Beeps", self._toggle("sounds"), checked=self._checked("sounds")),
             M("Show how long each command took", self._toggle("show_timing"), checked=self._checked("show_timing")),
             M("Free the GPU while a game runs (model loads back when you press the key)",

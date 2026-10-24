@@ -32,7 +32,7 @@ RestartApplications=no
 Name: "en"; MessagesFile: "compiler:Default.isl"
 
 [Messages]
-WelcomeLabel2=This installs Windows Voice Agent: hold F9, say what you want, let go.%n%nAfter installing it downloads its speech model once (about 550 MB), then shows a setup check and the list of things you can say.
+WelcomeLabel2=WARNING: this app is completely vibe coded. An AI wrote it and only a very small part of it has been reviewed by a human. It can close apps, press keys and shut down Windows when asked. Install it entirely at your own risk.%n%nThis installs Windows Voice Agent: hold F9, say what you want, let go. After installing it downloads its speech model once (about 550 MB), then shows a setup check and the list of things you can say.
 
 [Tasks]
 Name: "desktopicon"; Description: "Put a shortcut on the Desktop"; Flags: unchecked

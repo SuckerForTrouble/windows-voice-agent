@@ -1,3 +1,12 @@
+> [!CAUTION]
+> # ⚠️ THIS APP IS COMPLETELY VIBE CODED
+> **An AI wrote it, and only a very small part of it has been reviewed by a human.**
+> It runs on your PC and can close apps, press keys, type, and shut down or restart
+> Windows when asked. Automated tests check that commands are understood, not that
+> everything is safe or works on your PC.
+>
+> **Install and use it entirely at your own risk.**
+
 # 🎙️ Windows Voice Agent
 
 Talk to your PC. **Hold F9, say what you want, let go.**
@@ -49,7 +58,7 @@ Everything else is off until you tick it.
 | **Push-to-talk keys** | Click one, press the key you want (F8, Pause, Ctrl+Alt+Space…). Works straight away. |
 | **Speech model** | **Fast / Balanced / Best** (Whisper) and **Parakeet** (fastest: about a tenth of a second per command even without a GPU; English, no Hindi), each with its memory use and download size. The top line shows what the one in use *really* uses on your PC, and how long your last command took. Also **cloud** speech (Groq or OpenAI, your own API key, stored encrypted; your recordings go to them), and **Delete unused models**. |
 | **Microphone** | Pick which mic it listens to. |
-| **Optional features** | Spoken answers · the pill · beeps · how long each command took · **free the GPU while a game runs** (on: the model leaves graphics memory when a game starts, and loads back while you talk when you press the key) · typing language (**Hindi**) · Discord keybinds · clips with NVIDIA or Xbox. |
+| **Optional features** | Spoken answers · the pill and its **style** (Minimal, Advanced with a mic meter and timing, or Funky) · beeps · how long each command took · **free the GPU while a game runs** (on: the model leaves graphics memory when a game starts, and loads back while you talk when you press the key) · typing language (**Hindi**) · Discord keybinds · clips with NVIDIA or Xbox. |
 | **Teach it my voice** | The AI trick below. |
 
 Talk normally. "Can you open YouTube and search for lofi beats please" works. So does

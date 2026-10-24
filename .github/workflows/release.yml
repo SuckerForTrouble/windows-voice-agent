@@ -150,6 +150,6 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          $notes = "**New here?** Download **WindowsVoiceAgent-Setup.exe** below and run it. Windows may say it protected your PC: click *More info* → *Run anyway*.`n`nAlready installed? It updates itself within a minute of starting (or tray icon → *Check for updates*)."
+          $notes = "> [!CAUTION]`n> **This app is completely vibe coded:** an AI wrote it and only a very small part of it has been reviewed by a human. Install it entirely at your own risk.`n`n**New here?** Download **WindowsVoiceAgent-Setup.exe** below and run it. Windows may say it protected your PC: click *More info* → *Run anyway*.`n`nAlready installed? It updates itself within a minute of starting (or tray icon → *Check for updates*)."
           gh release create $env:GITHUB_REF_NAME dist\WindowsVoiceAgent-Setup.exe dist\WindowsVoiceAgent-portable.zip `
             --title "Windows Voice Agent $env:GITHUB_REF_NAME" --notes $notes --generate-notes
