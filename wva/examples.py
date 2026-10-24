@@ -131,6 +131,8 @@ CASES = [
     ("close this window", ["close window"]),
     ("maximize", ["maximize | restore"]),
     ("fullscreen", ["fullscreen"]),
+    ("make this window fullscreen", ["fullscreen"]),
+    ("exit fullscreen", ["fullscreen"]),
     ("center the window", ["center window"]),
     ("force close this window", ["force quit window"]),
     ("snap it left", ["snap left | right"]),

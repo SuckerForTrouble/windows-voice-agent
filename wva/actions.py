@@ -153,12 +153,15 @@ def _procs(exes):
     return out
 
 
+GAME_EXES = {e for k in ("valorant", "league", "roblox", "minecraft", "fortnite", "gta", "counter strike")
+             for e in apps.APP_PROCS[k]}
+
+
 def _game_procs():
     """Running games: anything started from a Steam / Epic library folder, or a known game."""
     import psutil
     dirs = apps.game_dirs()
-    known = {e for k in ("valorant", "league", "roblox", "minecraft", "fortnite", "gta", "counter strike")
-             for e in apps.APP_PROCS[k]}
+    known = GAME_EXES
     out = []
     for p in psutil.process_iter(["name", "exe"]):
         try:
@@ -521,6 +524,34 @@ def maximize():
     w = _fg_or_none()
     if w:
         win.toggle_maximize(w.hwnd)
+
+
+# Apps whose own F11 is a real fullscreen; for the rest F11 did nothing (v0.1.0 bug).
+F11_EXES = {e for b in apps.BROWSERS for e in apps.APP_PROCS[b]} | {"explorer.exe", "windowsterminal.exe", "code.exe",
+                                                                     "notepad++.exe", "obsidian.exe", "vlc.exe"}
+
+
+def fullscreen():
+    """F11 where the app has a fullscreen of its own (browsers, File Explorer, Terminal,
+    VS Code), Alt+Enter in games, Win+Shift+Enter for Store apps, and for everything
+    else (Discord, Spotify, Stremio…) a borderless window over the whole screen.
+    Saying it again undoes it."""
+    if CTX.dry:
+        return log("fullscreen: F11 (browsers, Explorer…) / Alt+Enter (games) / borderless over the whole screen")
+    w = _fg_or_none()
+    if not w:
+        return
+    exe = w.exe.lower()
+    if win.is_borderless(w.hwnd):
+        win.toggle_borderless(w.hwnd)
+    elif exe in F11_EXES or w.cls == "CabinetWClass":
+        keys("f11")
+    elif w.cls == "ApplicationFrameWindow":  # Store apps (Photos, Calculator…)
+        keys("win+shift+enter")
+    elif exe in GAME_EXES or any(win.exe_path(w.pid).lower().startswith(d + "\\") for d in apps.game_dirs()):
+        keys("alt+enter")
+    else:
+        win.toggle_borderless(w.hwnd)
 
 
 def restore_minimized(all_=False):

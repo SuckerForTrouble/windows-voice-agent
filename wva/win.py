@@ -82,6 +82,7 @@ if WINDOWS:
     _proto(user32.IsWindowVisible, wintypes.BOOL, wintypes.HWND)
     _proto(user32.GetWindow, wintypes.HWND, wintypes.HWND, wintypes.UINT)
     _proto(user32.GetWindowLongW, wintypes.LONG, wintypes.HWND, ctypes.c_int)
+    _proto(user32.SetWindowLongW, wintypes.LONG, wintypes.HWND, ctypes.c_int, wintypes.LONG)
     _proto(user32.GetWindowTextLengthW, ctypes.c_int, wintypes.HWND)
     _proto(user32.GetWindowTextW, ctypes.c_int, wintypes.HWND, wintypes.LPWSTR, ctypes.c_int)
     _proto(user32.GetClassNameW, ctypes.c_int, wintypes.HWND, wintypes.LPWSTR, ctypes.c_int)
@@ -350,6 +351,38 @@ def covers_monitor(hwnd):
     m = _monitor_info(hwnd).rcMonitor
     x, y, w, h = rect(hwnd)
     return x <= m.left and y <= m.top and x + w >= m.right and y + h >= m.bottom
+
+
+GWL_STYLE, WS_CAPTION, WS_THICKFRAME, SWP_FRAMECHANGED = -16, 0x00C00000, 0x00040000, 0x20
+EDGES = 0x1 | 0x100 | 0x200 | 0x20000  # WS_EX_DLGMODALFRAME | WINDOWEDGE | CLIENTEDGE | STATICEDGE
+_borderless = {}  # hwnd -> (style, exstyle, rect, was maximised): windows we made fullscreen
+
+
+def is_borderless(hwnd):
+    return hwnd in _borderless
+
+
+def toggle_borderless(hwnd):
+    """Fullscreen for apps that have none: no title bar or borders, the whole monitor
+    (taskbar included). Again puts it back exactly as it was. True when it went fullscreen."""
+    if hwnd in _borderless:
+        style, ex, (x, y, w, h), was_max = _borderless.pop(hwnd)
+        user32.SetWindowLongW(hwnd, GWL_STYLE, style)
+        user32.SetWindowLongW(hwnd, GWL_EXSTYLE, ex)
+        user32.SetWindowPos(hwnd, None, x, y, w, h, SWP_NOZORDER | SWP_FRAMECHANGED)
+        if was_max:
+            user32.ShowWindow(hwnd, SW_MAXIMIZE)
+        return False
+    was_max = bool(user32.IsZoomed(hwnd))
+    if was_max or user32.IsIconic(hwnd):
+        user32.ShowWindow(hwnd, SW_RESTORE)  # so the size we save is its normal one
+    style, ex = user32.GetWindowLongW(hwnd, GWL_STYLE), user32.GetWindowLongW(hwnd, GWL_EXSTYLE)
+    _borderless[hwnd] = (style, ex, rect(hwnd), was_max)
+    m = _monitor_info(hwnd).rcMonitor
+    user32.SetWindowLongW(hwnd, GWL_STYLE, style & ~(WS_CAPTION | WS_THICKFRAME))
+    user32.SetWindowLongW(hwnd, GWL_EXSTYLE, ex & ~EDGES)
+    user32.SetWindowPos(hwnd, None, m.left, m.top, m.right - m.left, m.bottom - m.top, SWP_NOZORDER | SWP_FRAMECHANGED)
+    return True
 
 
 def lock():

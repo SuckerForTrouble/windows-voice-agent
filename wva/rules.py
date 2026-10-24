@@ -297,8 +297,10 @@ rule(W, "move window to the other screen", "Win+Shift+Arrow",
 rule(W, "close window", "Closes the window in front",
      [r"close (?:this |the |that |current )?(?:window|app|application|program)", r"close (?:it|this|that)",
       r"get rid of (?:this|it|this window)"], a.close_window)
-rule(W, "fullscreen", "F11", [r"(?:toggle |go |make (?:it |this |the window )?)?fullscreen(?: (?:this |the )?window| it| this)?",
-                              r"(?:exit|leave) fullscreen"], lambda: a.keys("f11"))
+rule(W, "fullscreen", "Any app: browsers and Explorer use their own (F11), games Alt+Enter, other apps fill "
+     "the whole screen without borders. Say it again to undo",
+     [r"(?:toggle |go |make (?:it |this |the window |this window )?)?fullscreen(?: (?:this |the )?(?:window|app)| it| this)?",
+      r"(?:exit|leave|undo) fullscreen", r"(?:make (?:it |this )?)?cover the (?:whole )?screen"], a.fullscreen)
 rule(W, "maximize | restore", "Maximise or back to normal size",
      [r"(?:un)?maximi[sz]e(?: (?:this |the )?window| it| this)?", r"(?:make (?:it|this|the window) )?(?:as big as possible|full size|max size)",
       r"(?:restore|unmax) (?:the )?(?:window )?size"], a.maximize)
