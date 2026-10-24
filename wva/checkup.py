@@ -112,7 +112,12 @@ def c_routing():
 
 def c_volume():
     from . import audio
-    return OK, f"System volume is {audio.get_volume()}%", ""
+    try:
+        return OK, f"System volume is {audio.get_volume()}%", ""
+    except Exception as e:
+        if "Element not found" in str(e) or "-2147023728" in str(e):
+            return WARN, "No speakers or headphones found.", "Plug in (or turn on) your speakers or headphones, then check again."
+        raise
 
 
 def c_media():
