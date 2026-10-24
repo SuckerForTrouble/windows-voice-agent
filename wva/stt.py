@@ -25,7 +25,7 @@ MODEL_URL = "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-{}.b
 # the tray shows the real ones for the model in use.
 MODELS = {
     "base.en-q5_1": ("Fast: least accurate", 60, False, 200, "quick"),
-    "small.en-q5_1": ("Balanced: for weaker GPUs or no GPU", 190, False, 400, "ok"),
+    "small.en-q5_1": ("Balanced: good on weaker GPUs", 190, False, 400, "ok"),
     "large-v3-turbo-q5_0": ("Best: most accurate, Hindi too", 550, True, 900, "slow"),
 }
 CLOUD = {  # OpenAI-style transcription APIs: id -> (label, endpoint, model)

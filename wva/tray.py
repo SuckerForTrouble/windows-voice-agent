@@ -24,6 +24,14 @@ class Tray:
     def _checked(self, key):
         return lambda item: bool(config.get(key))
 
+    # pystray only takes handlers of (icon, item) or fewer: a value baked in as a default
+    # argument (lambda icon, item, m=mid) makes it refuse the whole menu, so these close over it.
+    def _is(self, key, value):
+        return lambda item: config.get(key) == value
+
+    def _call(self, fn, *args):
+        return lambda icon, item: fn(*args)
+
     def _set(self, key, value, after=None):
         def fn(icon, item):
             config.set(key, value)
@@ -38,7 +46,7 @@ class Tray:
         items = [M("Windows default", self._set("mic", ""), checked=lambda i: not config.get("mic"), radio=True)]
         try:
             for name in recorder.input_devices():
-                items.append(M(name, self._set("mic", name), checked=lambda i, n=name: config.get("mic") == n, radio=True))
+                items.append(M(name, self._set("mic", name), checked=self._is("mic", name), radio=True))
         except Exception:
             pass
         return items
@@ -69,19 +77,19 @@ class Tray:
         M, S = pystray.MenuItem, pystray.Menu.SEPARATOR
         have = stt.downloaded()
         on_gpu = not state.stt or state.stt.backend != "cpu"
-        items = [M(self._in_use(), lambda: None, enabled=False), S]
+        items = [M(self._in_use(), lambda: None, enabled=False),
+                 M(f"The {'GPU' if on_gpu else 'CPU'} only works while it turns speech into text: 0% when idle",
+                   lambda: None, enabled=False), S]
         for mid, (label, mb, _, mem, cpu_speed) in stt.MODELS.items():
-            size = f"{have[mid]} MB on disk" if mid in have else f"{mb} MB download"
-            cost = (f"~{mem} MB VRAM + ~100 MB RAM · GPU busy only while it listens" if on_gpu else
-                    f"~{mem + 100} MB RAM · CPU busy a moment per command ({cpu_speed})")
-            items.append(M(f"{label}   —   {cost}   ({size})", lambda icon, item, m=mid: self.app.set_model(m),
-                           checked=lambda i, m=mid: config.get("model") == m, radio=True))
+            size = "downloaded" if mid in have else f"{mb} MB download"
+            cost = f"~{mem} MB VRAM + 100 MB RAM" if on_gpu else f"~{mem + 100} MB RAM, {cpu_speed} on CPU"
+            items.append(M(f"{label}  ·  {cost}  ·  {size}", self._call(self.app.set_model, mid),
+                           checked=self._is("model", mid), radio=True))
         items.append(S)
         for pid, (label, _, _) in stt.CLOUD.items():
-            items.append(M(label, lambda icon, item, p=pid: self.app.set_model(p),
-                           checked=lambda i, p=pid: config.get("model") == p, radio=True))
+            items.append(M(label, self._call(self.app.set_model, pid), checked=self._is("model", pid), radio=True))
         items.append(M("Set a cloud API key…", pystray.Menu(*[
-            M(stt.CLOUD[p][0].split(" (")[0].replace("Cloud: ", ""), lambda icon, item, p=p: self.app.set_cloud_key(p))
+            M(stt.CLOUD[p][0].split(" (")[0].replace("Cloud: ", ""), self._call(self.app.set_cloud_key, p))
             for p in stt.CLOUD])))
         unused = sum(mb for m, mb in have.items() if m != config.get("model"))
         items += [S, M(f"Delete unused models ({unused} MB)" if unused else "No unused models to delete",
