@@ -10,25 +10,29 @@ import re
 from . import APP_NAME, __version__, config, history, paths
 from .engine import CTX, RULES
 
+# icon, a few plain words (the guide is for skimming: say less)
 GROUP_INFO = {
-    "Open & search": ("🚀", "Open anything by name, or search the web, YouTube, shops, maps."),
-    "Close & switch apps": ("🪟", "Close an app even when it's behind your game, quit tray apps completely, jump between apps."),
-    "Spotify": ("🎵", "Works while you're in another app or a game."),
-    "Discord": ("💬", "Mute, deafen, calls, jump to a server or DM. For use inside games, see Setup tips."),
-    "Stremio & watching": ("🎬", "Say a movie or show: its Stremio page opens with the streams to pick from."),
-    "Reels & Shorts": ("📱", "Hands-free Instagram reels and YouTube Shorts."),
-    "YouTube": ("▶️", "While a YouTube video is the window in front."),
-    "Gaming": ("🎮", "Clips and recordings through the NVIDIA app (or Xbox Game Bar), FPS overlay."),
-    "Sound & media": ("🔊", "Volume, mute, play/pause/next for whatever is playing."),
-    "App volume": ("🎚️", "One app's volume without touching the rest."),
-    "Browser": ("🌐", "Tabs, scrolling, zoom: sent to the window in front."),
-    "Keyboard": ("⌨️", "Type text or press any key combination."),
-    "Windows": ("🖥️", "Snap, resize, minimise, desktops, other monitor."),
-    "System": ("⚙️", "Screenshots, lock, sleep, shutdown (with a 30 s warning), Wi-Fi, Bluetooth, brightness."),
-    "Info": ("ℹ️", "Ask and it answers, on screen and out loud."),
-    "Timers": ("⏱️", "As many as you like, by name."),
-    "Voice agent": ("🧭", "Help, setup check, updates, teaching it your voice."),
+    "Open & search": ("🚀", "Open any app, game or website. Search anything."),
+    "Close & switch apps": ("🪟", "Close apps, even the ones hiding behind your game."),
+    "Spotify": ("🎵", "Control Spotify from anywhere."),
+    "Discord": ("💬", "Mute, deafen, answer calls."),
+    "Stremio & watching": ("🎬", "Say a movie or show, it opens."),
+    "Reels & Shorts": ("📱", "Scroll reels without touching anything."),
+    "YouTube": ("▶️", "When a YouTube video is open."),
+    "Gaming": ("🎮", "Clip it, record it, show FPS."),
+    "Sound & media": ("🔊", "Volume, pause, next song."),
+    "App volume": ("🎚️", "Just one app louder or quieter."),
+    "Browser": ("🌐", "Tabs, scrolling, zoom."),
+    "Keyboard": ("⌨️", "Type words, press keys."),
+    "Windows": ("🖥️", "Snap, resize, minimise windows."),
+    "System": ("⚙️", "Screenshot, lock, sleep, Wi-Fi."),
+    "Info": ("ℹ️", "Ask the time, weather, RAM."),
+    "Timers": ("⏱️", "Set timers by voice."),
+    "Voice agent": ("🧭", "Help, setup check, updates."),
 }
+# The first things to try. Each one is checked by the tests (tests/test_routing.py).
+STARTERS = [("🎵", "Open Spotify"), ("🪟", "Close Discord"), ("🔊", "Volume 30"), ("🎬", "Watch Interstellar"),
+            ("⏱️", "Set a 10 minute timer"), ("⏭️", "Next song"), ("📸", "Take a screenshot"), ("🕒", "What time is it")]
 ORDER = list(GROUP_INFO)
 
 
@@ -71,7 +75,7 @@ def _recent():
 def render(topic=""):
     key = config.get("agent_key").upper()
     dkey = config.get("dictate_key").upper()
-    data = {"groups": groups(), "recent": _recent(), "topic": topic or ""}
+    data = {"groups": groups(), "recent": _recent(), "topic": topic or "", "starters": STARTERS}
     page = TEMPLATE
     for k, v in {"APP": APP_NAME, "VERSION": __version__, "KEY": key, "DKEY": dkey}.items():
         page = page.replace("{{" + k + "}}", html.escape(v))
@@ -90,61 +94,99 @@ TEMPLATE = r"""<!doctype html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Voice guide</title>
 <style>
-:root{--bg:#f6f7fb;--card:#fff;--ink:#1d2230;--soft:#5d6577;--line:#e3e6ee;--accent:#4f5bd5;--ok:#1f8a4c;--bad:#c2410c;--chip:#eef0fb}
-@media (prefers-color-scheme:dark){:root{--bg:#14161c;--card:#1d2029;--ink:#e8eaf0;--soft:#a2a9b8;--line:#2c303b;--accent:#8b95ff;--ok:#4ade80;--bad:#fb923c;--chip:#262a39}}
-*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.5 "Segoe UI",system-ui,sans-serif}
-header{padding:28px 20px 8px;max-width:1100px;margin:auto}h1{margin:0 0 4px;font-size:26px}
-.sub{color:var(--soft)}main{max-width:1100px;margin:auto;padding:0 20px 60px}
-.how{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:12px;margin:18px 0}
-.how div{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:14px}
-.how b{display:block;margin-bottom:4px}kbd{background:var(--chip);border:1px solid var(--line);border-bottom-width:2px;border-radius:6px;padding:1px 7px;font:600 13px Consolas,monospace}
-#q{width:100%;padding:12px 14px;font-size:16px;border-radius:10px;border:1px solid var(--line);background:var(--card);color:var(--ink);margin:6px 0 18px}
-nav{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:16px}nav a{background:var(--chip);color:var(--ink);text-decoration:none;padding:4px 10px;border-radius:999px;font-size:13px}
-section{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:16px 18px;margin-bottom:14px}
-section h2{margin:0;font-size:18px}section p.i{margin:2px 0 10px;color:var(--soft);font-size:14px}
-.r{padding:8px 0;border-top:1px solid var(--line)}.r:first-of-type{border-top:0}.say{font-weight:600}.d{color:var(--soft);font-size:13.5px}
-.ex{display:flex;flex-wrap:wrap;gap:6px;margin-top:4px}.ex span{background:var(--chip);border-radius:8px;padding:2px 9px;font-size:13.5px}
-.ex span::before{content:"“"}.ex span::after{content:"”"}
-.recent li{list-style:none;padding:4px 0;border-top:1px solid var(--line)}.recent ul{padding:0;margin:0}
-.ok{color:var(--ok)}.bad{color:var(--bad)}.t{color:var(--soft);font-size:12.5px;margin-right:8px}
-.hide{display:none}footer{color:var(--soft);font-size:13px;text-align:center;margin-top:30px}
+:root{--bg:#f4f5fa;--card:#fff;--ink:#161a24;--soft:#5d6577;--line:#e2e5ee;--accent:#4f5bd5;--accent2:#e8eaff;--ok:#1f8a4c;--bad:#c2410c;--chip:#eef0fb}
+@media (prefers-color-scheme:dark){:root{--bg:#121419;--card:#1c1f28;--ink:#eef0f5;--soft:#a2a9b8;--line:#2b2f3a;--accent:#8b95ff;--accent2:#262a45;--ok:#4ade80;--bad:#fb923c;--chip:#262a39}}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font:17px/1.5 "Segoe UI",system-ui,sans-serif}
+main{max-width:880px;margin:auto;padding:28px 20px 60px}
+h1{font-size:34px;margin:0}h2{font-size:21px;margin:0}.sub{color:var(--soft);margin:4px 0 22px}
+kbd{display:inline-block;background:var(--card);border:2px solid var(--line);border-bottom-width:4px;border-radius:10px;padding:2px 12px;font:700 20px "Segoe UI",sans-serif}
+.steps{display:grid;grid-template-columns:repeat(3,1fr);gap:14px}
+.step{background:var(--card);border:1px solid var(--line);border-radius:18px;padding:20px 16px;text-align:center}
+.step .n{display:inline-grid;place-items:center;width:34px;height:34px;border-radius:50%;background:var(--accent);color:#fff;font-weight:700;margin-bottom:10px}
+.step b{display:block;font-size:22px;margin:8px 0 2px}.step span{color:var(--soft);font-size:15px}
+.also{color:var(--soft);text-align:center;margin:14px 0 30px;font-size:15px}.also kbd{font-size:14px;padding:0 8px;border-width:1px 1px 3px}
+.try{display:flex;flex-wrap:wrap;gap:10px;margin:12px 0 30px}
+.try span{background:var(--accent2);border-radius:999px;padding:9px 16px;font-size:17px;font-weight:600}
+#q{position:sticky;top:10px;z-index:2;width:100%;padding:14px 18px;font-size:18px;border-radius:14px;border:2px solid var(--line);background:var(--card);color:var(--ink);margin:0 0 16px;box-shadow:0 4px 18px rgba(0,0,0,.06)}
+#q:focus{outline:none;border-color:var(--accent)}
+#groups{display:flex;flex-direction:column}
+details{background:var(--card);border:1px solid var(--line);border-radius:16px;margin-bottom:10px}
+summary{list-style:none;cursor:pointer;padding:16px 18px;display:flex;align-items:center;gap:14px}
+summary::-webkit-details-marker{display:none}
+summary .ic{font-size:26px;width:34px;text-align:center}summary .nm{font-weight:700;font-size:18px}
+summary .ds{color:var(--soft);font-size:15px}summary .ct{margin-left:auto;color:var(--soft);font-size:14px;white-space:nowrap}
+summary .ct::after{content:"  ▸";}details[open] summary .ct::after{content:"  ▾"}
+.r{padding:12px 18px 12px 66px;border-top:1px solid var(--line)}
+.say{font-size:19px;font-weight:600}.say::before{content:"“";color:var(--accent)}.say::after{content:"”";color:var(--accent)}
+.d{color:var(--soft);font-size:15px}.alt{color:var(--soft);font-size:14px;margin-top:2px}
+.k{float:right;font:600 12px Consolas,monospace;color:var(--soft);background:var(--chip);border-radius:6px;padding:2px 7px;margin-left:10px}
+.stuck{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:18px 20px;margin:26px 0 12px}
+.stuck div{padding:6px 0;font-size:17px}.stuck b{display:inline-block;min-width:190px}
+.more summary .nm{font-size:16px}.more .r{padding-left:22px}
+.recent li{list-style:none;padding:6px 18px;border-top:1px solid var(--line);font-size:15px}.recent ul{padding:0;margin:0}
+.ok{color:var(--ok)}.bad{color:var(--bad)}.t{color:var(--soft);font-size:13px;margin-right:8px}
+.hide{display:none}mark{background:var(--accent2);color:inherit;border-radius:4px}
+footer{color:var(--soft);font-size:13px;text-align:center;margin-top:30px}
 .credit{color:var(--soft);opacity:.6;font-size:11px;text-align:center;margin-top:6px}
-</style></head><body>
-<header><h1>🎙️ {{APP}}: what you can say</h1>
-<div class="sub">Version {{VERSION}} · everything here is checked to work · type below to filter</div></header>
-<main>
-<div class="how">
- <div><b>1. Hold <kbd>{{KEY}}</kbd> and talk</b>Let go and it runs. A quick tap starts listening, a second tap stops. <kbd>Esc</kbd> cancels.</div>
- <div><b>2. Talk normally</b>"Can you open Spotify please" works. Chain things: "open YouTube and search lofi".</div>
- <div><b>3. Typing instead: <kbd>{{DKEY}}</kbd></b>Hold it and speak: your words are typed where the cursor is. Start with "computer …" to run a command.</div>
- <div><b>Didn't work?</b>Say <i>"check my setup"</i>. To teach it how you talk: <i>"export my voice history"</i>, paste the file into Gemini or ChatGPT, copy the answer, say <i>"import the AI answer"</i>.</div>
+@media (max-width:620px){.steps{grid-template-columns:1fr}.r{padding-left:18px}summary .ds{display:none}}
+</style></head><body><main>
+<h1>🎙️ Talk to your PC</h1>
+<div class="sub">Three steps. That's all.</div>
+<div class="steps">
+ <div class="step"><div class="n">1</div><br><kbd>{{KEY}}</kbd><b>Hold it</b><span>a quick tap works too</span></div>
+ <div class="step"><div class="n">2</div><br><span style="font-size:30px">🗣️</span><b>Say it</b><span>talk normally</span></div>
+ <div class="step"><div class="n">3</div><br><span style="font-size:30px">✋</span><b>Let go</b><span>it does it</span></div>
 </div>
-<input id="q" placeholder="Search commands… (spotify, discord, close, timer, volume)" autofocus>
-<nav id="nav"></nav><div id="groups"></div>
-<section id="recentbox"><h2>🕘 What you said lately</h2><p class="i">✓ ran · ✗ not understood (those are what "export my voice history" sends to the AI)</p><div class="recent"><ul id="recent"></ul></div></section>
-<section><h2>🛠️ Setup tips</h2>
-<div class="r"><div class="say">Discord inside games</div><div class="d">Discord's own shortcuts only work while Discord is in front, so the agent flicks to Discord and back, which can kick you out of a fullscreen game. Fix: Discord → Settings → Keybinds → add <b>Toggle Mute</b> = <kbd>Ctrl+Shift+Alt+M</kbd> and <b>Toggle Deafen</b> = <kbd>Ctrl+Shift+Alt+D</kbd>, then tray → Optional features → tick <b>Discord keybinds</b>.</div></div>
-<div class="r"><div class="say">"Clip that"</div><div class="d">Needs Instant Replay on: NVIDIA app → Alt+Z → Instant Replay → On. (Using Xbox Game Bar instead? Tray → Optional features → Clips with.)</div></div>
-<div class="r"><div class="say">Doesn't react inside a game</div><div class="d">Some games run as administrator, and Windows blocks normal apps from sending keys to them. Right-click the Voice Agent shortcut → Run as administrator.</div></div>
-<div class="r"><div class="say">Another key, a lighter model, spoken answers, Hindi typing</div><div class="d">All in the tray menu (right-click the icon by the clock): Push-to-talk keys, Speech model (with how much memory each uses), Optional features. Everything extra is off until you tick it.</div></div>
-<div class="r"><div class="say">Hears the wrong words</div><div class="d">Use the export-for-AI steps above. Or speak a little slower and closer to the mic, and pick the right mic in the tray menu.</div></div>
-</section>
-<footer>{{APP}} {{VERSION}} · it updates itself · tray icon → Check for updates</footer>
+<div class="also">Want it to <b>type</b> instead? Hold <kbd>{{DKEY}}</kbd>. Changed your mind? <kbd>Esc</kbd></div>
+
+<h2>Try these first</h2>
+<div class="try" id="try"></div>
+
+<input id="q" placeholder="🔍  What do you want to do?  (spotify, close, volume, timer…)" autofocus>
+<div id="groups"></div>
+
+<div class="stuck"><h2>Stuck?</h2>
+ <div><b>Nothing happens</b> say <i>“check my setup”</i></div>
+ <div><b>It hears wrong words</b> tray icon → Teach it my voice</div>
+ <div><b>Want a setting</b> right-click the tray icon by the clock</div>
+</div>
+
+<details class="more"><summary><span class="ic">🛠️</span><span class="nm">Setup tips</span><span class="ct">5 tips</span></summary>
+<div class="r"><div class="say">Mute me on Discord</div><div class="d">Inside a game: in Discord → Settings → Keybinds add Toggle Mute = <b>Ctrl+Shift+Alt+M</b> and Toggle Deafen = <b>Ctrl+Shift+Alt+D</b>. Then tray → Optional features → tick <b>Discord keybinds</b>.</div></div>
+<div class="r"><div class="say">Clip that</div><div class="d">Turn on Instant Replay: press <b>Alt+Z</b> in the NVIDIA app. Xbox Game Bar instead? Tray → Optional features → Clips with.</div></div>
+<div class="r"><div class="say">Doesn't work in one game</div><div class="d">That game runs as admin. Right-click the Voice Agent shortcut → Run as administrator.</div></div>
+<div class="r"><div class="say">Other key, faster model, Hindi</div><div class="d">Tray → Push-to-talk keys · Speech model · Optional features. Extras are off until you tick them.</div></div>
+<div class="r"><div class="say">Hears me wrong</div><div class="d">Say “export my voice history”, paste the file into Gemini or ChatGPT, copy its answer, say “import the AI answer”.</div></div>
+</details>
+<details class="more" id="recentbox"><summary><span class="ic">🕘</span><span class="nm">What you said lately</span><span class="ct" id="rc"></span></summary>
+<div class="recent"><ul id="recent"></ul></div></details>
+
+<footer>{{APP}} {{VERSION}} · updates itself · vibe coded, use at your own risk</footer>
 <div class="credit">made by profane for Billa Janta Party</div>
 </main>
 <script>
-const D={{DATA}};const G=document.getElementById("groups"),N=document.getElementById("nav"),Q=document.getElementById("q");
-const esc=s=>s.replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
-D.groups.forEach((g,i)=>{const id="g"+i;N.insertAdjacentHTML("beforeend",`<a href="#${id}">${g.icon} ${esc(g.name)}</a>`);
- G.insertAdjacentHTML("beforeend",`<section id="${id}" data-g="${esc(g.name.toLowerCase())}"><h2>${g.icon} ${esc(g.name)}</h2><p class="i">${esc(g.intro)}</p>`+
- g.rules.filter(r=>r.desc||r.examples.length).map(r=>`<div class="r" data-t="${esc((r.say+" "+r.desc+" "+r.examples.join(" ")).toLowerCase())}"><div class="say">${esc(r.say)}</div>`+
- (r.desc?`<div class="d">${esc(r.desc)}</div>`:"")+(r.examples.length?`<div class="ex">${r.examples.map(e=>`<span>${esc(e)}</span>`).join("")}</div>`:"")+`</div>`).join("")+`</section>`)});
+const D={{DATA}};const G=document.getElementById("groups"),Q=document.getElementById("q");
+const esc=s=>String(s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+const KEYS=/^(?:[A-Z][a-z]*\+)+\w+|^F\d+$|^(?:Ctrl|Alt|Win|Shift|Home|End|Page|F\d)/;
+D.starters.forEach(([i,t])=>document.getElementById("try").insertAdjacentHTML("beforeend",`<span>${i} ${esc(t)}</span>`));
+D.groups.forEach((g,gi)=>{
+ const rows=g.rules.filter(r=>r.examples.length||r.desc).map(r=>{
+  const ex=r.examples.length?r.examples:[r.say];const keyish=r.desc&&KEYS.test(r.desc)&&r.desc.length<40;
+  return `<div class="r" data-t="${esc((r.say+" "+r.desc+" "+ex.join(" ")+" "+g.name).toLowerCase())}">`+
+   (keyish?`<span class="k">${esc(r.desc)}</span>`:"")+`<div class="say">${esc(ex[0])}</div>`+
+   (r.desc&&!keyish?`<div class="d">${esc(r.desc)}</div>`:"")+
+   (ex.length>1?`<div class="alt">or: ${ex.slice(1,3).map(e=>"“"+esc(e)+"”").join(" · ")}</div>`:"")+`</div>`}).join("");
+ G.insertAdjacentHTML("beforeend",`<details data-g="${esc(g.name.toLowerCase())}"><summary><span class="ic">${g.icon}</span>`+
+  `<span><span class="nm">${esc(g.name)}</span><br><span class="ds">${esc(g.intro)}</span></span>`+
+  `<span class="ct">${g.rules.length} things</span></summary>${rows}</details>`)});
 const R=document.getElementById("recent");
 if(!D.recent.length){document.getElementById("recentbox").classList.add("hide")}
-D.recent.forEach(e=>R.insertAdjacentHTML("beforeend",`<li><span class="t">${esc(e.t)}</span><span class="${e.ok?"ok":"bad"}">${e.ok?"✓":"✗"}</span> “${esc(e.heard)}”${e.steps.length?` <span class="t">→ ${esc(e.steps.join(", "))}</span>`:""}</li>`));
-function filter(){const q=Q.value.trim().toLowerCase();document.querySelectorAll("#groups section").forEach(s=>{let any=false;
- s.querySelectorAll(".r").forEach(r=>{const hit=!q||r.dataset.t.includes(q)||s.dataset.g.includes(q);r.classList.toggle("hide",!hit);any=any||hit});
- s.classList.toggle("hide",!any)})}
+document.getElementById("rc").textContent=D.recent.length+" lately";
+D.recent.forEach(e=>R.insertAdjacentHTML("beforeend",`<li><span class="t">${esc(e.t)}</span><span class="${e.ok?"ok":"bad"}">${e.ok?"✓":"✗"}</span> “${esc(e.heard)}”</li>`));
+function filter(){const q=Q.value.trim().toLowerCase();
+ document.querySelectorAll("#groups details").forEach(s=>{let any=false;
+  s.querySelectorAll(".r").forEach(r=>{const hit=!q||r.dataset.t.includes(q);r.classList.toggle("hide",!hit);any=any||hit});
+  s.classList.toggle("hide",!any);s.open=!!q&&any;s.style.order=q&&s.dataset.g.includes(q)?0:1})}
 Q.addEventListener("input",filter);if(D.topic){Q.value=D.topic;filter()}
 </script></body></html>
 """

@@ -94,6 +94,13 @@ def test_mishearings():
         assert got == want, f"{text!r}: want {want}, got {got}"
 
 
+def test_guide_starters_route():
+    """The 'Try these first' phrases at the top of the voice guide."""
+    from wva.guide import STARTERS
+    bad = [t for _, t in STARTERS if not route(t)]
+    assert not bad, f"starter phrases that don't route: {bad}"
+
+
 def test_stremio_parse():
     from wva.extras import parse_show
     assert parse_show("breaking bad season 2 episode 3") == ("breaking bad", 2, 3)
