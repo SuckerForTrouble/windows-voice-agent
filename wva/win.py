@@ -434,6 +434,76 @@ def set_clipboard(text):
         user32.CloseClipboard()
 
 
+# ----------------------------------------------------------------- Windows 11 look
+def dpi_aware():
+    """Crisp menus and text on scaled screens (125%, 150%) instead of a blurry stretched
+    bitmap, and real pixel positions when moving other apps' windows."""
+    try:
+        ctypes.windll.user32.SetProcessDpiAwarenessContext(ctypes.c_void_p(-4))  # PER_MONITOR_AWARE_V2
+    except Exception:
+        try:
+            ctypes.windll.shcore.SetProcessDpiAwareness(2)
+        except Exception:
+            pass
+
+
+def dark_mode():
+    """Windows is set to dark apps (Settings → Personalisation → Colours)."""
+    try:
+        import winreg
+        with winreg.OpenKey(winreg.HKEY_CURRENT_USER, r"Software\Microsoft\Windows\CurrentVersion\Themes\Personalize") as k:
+            return winreg.QueryValueEx(k, "AppsUseLightTheme")[0] == 0
+    except OSError:
+        return False
+
+
+def follow_theme_menus():
+    """Tray menus in dark when Windows is dark, like Explorer's (uxtheme's unnamed
+    SetPreferredAppMode / FlushMenuThemes, which Notepad++ and others use too)."""
+    try:
+        ux = ctypes.WinDLL("uxtheme")
+        ux[135](1)  # SetPreferredAppMode(AllowDark): follow the system setting
+        ux[136]()   # FlushMenuThemes
+    except Exception:
+        pass
+
+
+def modern_window(hwnd, dark=None):
+    """Rounded Windows 11 corners and a title bar that matches the theme."""
+    dark = dark_mode() if dark is None else dark
+    for attr, val in ((20, int(dark)), (33, 2)):  # DWMWA_USE_IMMERSIVE_DARK_MODE, DWMWA_WINDOW_CORNER_PREFERENCE=ROUND
+        v = ctypes.c_int(val)
+        try:
+            ctypes.windll.dwmapi.DwmSetWindowAttribute(hwnd, attr, ctypes.byref(v), ctypes.sizeof(v))
+        except Exception:
+            pass
+
+
+# ----------------------------------------------------------------- secrets
+class _BLOB(ctypes.Structure):
+    _fields_ = [("cbData", ctypes.c_uint32), ("pbData", ctypes.POINTER(ctypes.c_char))]
+
+
+def _dpapi(fn, data):
+    src = ctypes.create_string_buffer(data, len(data))
+    blob_in, blob_out = _BLOB(len(data), ctypes.cast(src, ctypes.POINTER(ctypes.c_char))), _BLOB()
+    if not fn(ctypes.byref(blob_in), None, None, None, None, 0x1, ctypes.byref(blob_out)):  # UI_FORBIDDEN
+        raise OSError("DPAPI failed")
+    try:
+        return ctypes.string_at(blob_out.pbData, blob_out.cbData)
+    finally:
+        kernel32.LocalFree(blob_out.pbData)
+
+
+def protect(data):
+    """Encrypt for this Windows user only (DPAPI): an API key in config.json is useless elsewhere."""
+    return _dpapi(ctypes.windll.crypt32.CryptProtectData, data)
+
+
+def unprotect(data):
+    return _dpapi(ctypes.windll.crypt32.CryptUnprotectData, data)
+
+
 # ----------------------------------------------------------------- processes
 def kill_with_me(proc):
     """Put a child process in a job that dies with us, so whisper-server never outlives

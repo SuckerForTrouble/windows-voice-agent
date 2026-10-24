@@ -1,5 +1,6 @@
 """Settings in %LOCALAPPDATA%\\WindowsVoiceAgent\\config.json. Missing keys get the
-defaults below, so an update can add settings without touching anyone's file."""
+defaults below, so an update can add settings without touching anyone's file.
+The defaults are the light setup; every extra is opt-in from the tray."""
 import json
 
 from . import paths
@@ -8,13 +9,17 @@ DEFAULTS = {
     # Hold the key and talk, let go to run it. A quick tap toggles instead (tap, talk, tap).
     "agent_key": "f9",       # commands
     "dictate_key": "f10",    # types what you say into the focused app ("computer …" still runs commands)
-    "model": "large-v3-turbo-q5_0",  # or "small.en-q5_1" for weak GPUs / CPU only
+    "model": "large-v3-turbo-q5_0",  # tray → Speech model: base.en-q5_1 | small.en-q5_1 | large-v3-turbo-q5_0 | groq | openai
     "backend": "auto",       # auto (GPU via Vulkan, CPU if that fails) | vulkan | cpu
-    "language": "en",
+    "language": "en",        # what commands are spoken in (they're English phrases)
+    "dictate_language": "en",  # what the typing key types: en | hi (Hindi) | auto
+    "cloud_keys": {},        # API keys for the cloud models, encrypted for this Windows user
     "mic": "",               # part of the microphone's name; empty = the Windows default mic
     "sounds": True,          # start/stop beeps
     "osd": True,             # the little "heard: …" pill at the top of the screen
-    "voice_replies": True,   # answers (time, weather…) read out loud
+    "voice_replies": False,  # answers (time, weather…) read out loud as well as shown (opt-in)
+    "show_timing": False,    # the pill says how long each command took (opt-in)
+    "unload_in_games": True,  # a game starts: the speech model leaves graphics memory until you press the key
     "auto_update": True,
     "start_with_windows": True,
     "weather_place": "",     # empty = found by IP, or e.g. "Ludhiana"
@@ -56,5 +61,8 @@ def set(key, value):  # noqa: A001 - mirrors get()
 
 
 def save():
+    """Only what differs from the defaults is written, so a changed default reaches
+    everyone who never touched that setting."""
     paths.ensure()
-    paths.CONFIG.write_text(json.dumps(_cache, indent=2), encoding="utf-8")
+    changed = {k: v for k, v in _cache.items() if DEFAULTS.get(k) != v}
+    paths.CONFIG.write_text(json.dumps(changed, indent=2), encoding="utf-8")

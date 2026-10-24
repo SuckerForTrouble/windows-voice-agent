@@ -24,6 +24,12 @@ def c_speech():
     s = state.stt
     if not s:
         return FAIL, "The speech model hasn't started.", "Wait for 'Ready' in the tray tooltip. The first start downloads ~550 MB."
+    if s.backend == "cloud":
+        return (OK, f"Cloud: {s.device}. Recordings are sent there to be turned into text.", "") if s.ready else \
+            (FAIL, s.error, "Tray → Speech model → Set a cloud API key, or pick a model that runs on this PC.")
+    if not s.ready and state.gaming and not s.error:
+        return OK, f"Unloaded while {state.gaming} runs, to give it the graphics memory (loads back on the key)", \
+            "Prefer it loaded? Tray → Optional features → untick 'Free the GPU while a game runs'."
     if s.error:
         return FAIL, s.error, "Restart the app from the tray. If it keeps failing, set the model to small.en-q5_1 (see FAQ in the README)."
     if not s.ready:
@@ -31,7 +37,24 @@ def c_speech():
     if s.backend == "cpu":
         return WARN, f"Running on the CPU ({s.model}). Works, but slower and uses more RAM.", \
             "Update your NVIDIA driver (GeForce Experience / NVIDIA app → Drivers), then restart the voice agent."
-    return OK, f"{s.model} on the GPU ({s.device or 'Vulkan'})", ""
+    u = state.usage
+    mem = " · ".join(x for x in (f"{u['ram']} MB RAM" if u.get("ram") else "",
+                                 f"{u['vram'] / 1000:.1f} GB VRAM" if u.get("vram") else "") if x)
+    return OK, f"{s.model} on the GPU ({s.device or 'Vulkan'})" + (f" · {mem}" if mem else ""), ""
+
+
+def c_speed():
+    t = state.timings
+    if not t:
+        return WARN, "No commands yet this session.", "Say a few commands, then run the check again to see the speed."
+    stt_avg = sum(x["stt"] for x in t) / len(t)
+    total_avg = sum(x["total"] for x in t) / len(t)
+    detail = f"Last {len(t)} commands: {stt_avg:.2f} s to turn speech into text, {total_avg:.2f} s from letting go to done"
+    if stt_avg > 1.5:
+        fix = ("It's running on the CPU: update the NVIDIA driver, then restart the agent." if state.stt and state.stt.backend == "cpu"
+               else "Try a lighter model: tray → Speech model → Balanced or Fast.")
+        return WARN, detail, fix
+    return OK, detail, ""
 
 
 def c_mic():
@@ -65,7 +88,7 @@ def c_hotkeys():
     if bad:
         keys = ", ".join(config.get(f"{m}_key").upper() for m in bad)
         return FAIL, f"Another app already uses {keys}.", \
-            f"Close the app using {keys}, or change agent_key / dictate_key in config.json (tray → Open data folder), then restart."
+            "Tray → Push-to-talk keys → change…, and press a free key (F8, Pause, Ctrl+Alt+Space…)."
     return OK, f"Hold {config.get('agent_key').upper()} for commands, {config.get('dictate_key').upper()} to type", ""
 
 
@@ -203,7 +226,7 @@ def c_admin():
     return OK, "Normal user", "If commands do nothing inside one particular game, that game runs as admin: start the voice agent as administrator too."
 
 
-CHECKS = [("Speech model", c_speech), ("Microphone", c_mic), ("Push-to-talk keys", c_hotkeys),
+CHECKS = [("Speech model", c_speech), ("Speed", c_speed), ("Microphone", c_mic), ("Push-to-talk keys", c_hotkeys),
           ("Every command routes", c_routing), ("Volume control", c_volume), ("Media controls (play/pause/what's playing)", c_media),
           ("Spotify", c_spotify), ("Discord", c_discord), ("Stremio", c_stremio), ("Steam & Epic games", c_games),
           ("Clips & recording", c_clips), ("NVIDIA GPU info", c_gpu), ("Wi-Fi & Bluetooth switches", c_radios),

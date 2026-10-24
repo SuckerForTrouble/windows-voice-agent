@@ -1,8 +1,10 @@
-"""The running agent: tray icon, push-to-talk keys, microphone -> whisper -> commands.
+"""The running agent: tray icon, push-to-talk keys, microphone -> speech model -> commands.
 
 Hold the agent key (F9) and talk; let go and it runs. A quick tap toggles
 instead (tap, talk, tap). Esc while listening cancels. The dictation key (F10)
-types what you say; "computer …" through it still runs a command."""
+types what you say; "computer …" through it still runs a command.
+While a game runs the speech model can step out of graphics memory; the next
+key press loads it back while you talk."""
 import importlib
 import logging
 import logging.handlers
@@ -14,15 +16,16 @@ import threading
 import time
 
 from . import (APP_ID, APP_NAME, __version__, apps, config, engine, history, osd, paths, speak, state, system, tuning, ui,
-               updater, win)
+               updater, usage, win)
 from . import rules  # noqa: F401  (registers the commands)
+from . import stt as speech
 from .recorder import Recorder
-from .stt import Whisper
 
 log = logging.getLogger("wva")
 TAP = 0.35            # a press shorter than this is a tap: toggle mode
 MIN_SECONDS = 0.35    # shorter recordings are ignored
 MIN_PEAK = 600        # quieter than this (of 32767) is silence
+GAME_IDLE = 120       # in a game, the model steps out again this long after the last command
 RUN_KEY = r"Software\Microsoft\Windows\CurrentVersion\Run"
 
 
@@ -49,12 +52,16 @@ class App:
         from .tray import Tray
         self.tray = Tray(self)
         self.rec = Recorder()
-        self.stt = Whisper(on_progress=self._progress)
+        self.stt = speech.make(on_progress=self._progress)
         state.stt = self.stt
         self.mode = None        # "agent" / "dictate" while listening
         self.toggled = False    # listening after a tap, until the next tap
         self.jobs = queue.Queue()
+        self.busy = False       # a recording is being turned into a command
         self.hotkeys = None
+        self.load_lock = threading.Lock()
+        self.last_used = 0.0
+        self.told_game = ""
         self.first_run = not paths.CONFIG.exists()
 
     # ------------------------------------------------------------- start-up
@@ -64,33 +71,24 @@ class App:
         threading.Thread(target=self._worker, daemon=True, name="worker").start()
 
     def _boot(self):
-        config.save()  # writes the defaults on the first run
+        config.save()  # creates the (empty) settings file on the first run
         if self.first_run and config.get("start_with_windows"):
             self.set_startup(True)
         n_words, n_says = tuning.apply()
         log.info("tuning: %s word fixes, %s phrases", n_words, n_says)
         apps.warm_up()
         system.restore_timers()
+        self._register_keys()  # before the model: the keys work (and say "loading…") meanwhile
         if config.get("auto_update"):
             threading.Thread(target=lambda: (time.sleep(20), self.check_updates()), daemon=True).start()
-        self.tray.set("loading", "Loading the speech model…")
         if self.first_run:
             osd.show(f"{APP_NAME} is getting ready. The first start downloads the speech model (~550 MB).", "busy", 0)
-        if not self.stt.start():
-            self.tray.set("error", self.stt.error)
-            osd.show(self.stt.error, "error", 12)
-            self.tray.notify(self.stt.error)
-            return
-        self._register_keys()
-        key = config.get("agent_key").upper()
-        where = "GPU" if self.stt.backend == "vulkan" else "CPU"
-        self.tray.set("ready", f"Ready: hold {key} and talk ({where})")
-        osd.show(f"Ready: hold {key} and talk", "ok", 4)
-        if self.first_run:
+        if self._load() and self.first_run:
             time.sleep(1)
             self.do("checkup.run_and_open")
             time.sleep(2)
             self.do("guide.open_guide")
+        threading.Thread(target=self._watch_games, daemon=True, name="games").start()
 
     def _register_keys(self):
         from .hotkey import Hotkeys
@@ -99,9 +97,57 @@ class App:
             ok = self.hotkeys.register(mode, config.get(f"{mode}_key"))
             state.hotkeys[mode] = ok
             if not ok:
-                msg = f"{config.get(f'{mode}_key').upper()} is taken by another app. Say or click 'check my setup' for help."
+                msg = f"{config.get(f'{mode}_key').upper()} is taken by another app: tray → Push-to-talk keys to pick another."
                 self.tray.notify(msg)
                 log.warning(msg)
+
+    def _load(self):
+        """Start the speech model (download it first if needed). Safe to call from anywhere."""
+        with self.load_lock:
+            if self.stt.ready:
+                return True
+            self.tray.set("loading", "Loading the speech model…")
+            ok = self.stt.start()
+        if not ok:
+            self.tray.set("error", self.stt.error)
+            osd.show(self.stt.error, "error", 12)
+            self.tray.notify(self.stt.error)
+            return False
+        self._ready_again()
+        if not state.gaming:
+            osd.show(f"Ready: hold {config.get('agent_key').upper()} and talk", "ok", 3)
+        threading.Thread(target=usage.refresh, args=(self.stt,), daemon=True).start()
+        return True
+
+    def _unload(self, game):
+        self.stt.stop()
+        state.usage = {}
+        self._ready_again()
+        if self.told_game != game:
+            self.told_game = game
+            osd.show(f"{game} is running: the speech model stepped out of graphics memory. "
+                     f"Press {config.get('agent_key').upper()} any time, it loads back while you talk.", "info", 7)
+        log.info("unloaded for %s", game)
+
+    def _watch_games(self):
+        """Every few seconds: a game started -> unload; it ended -> load again."""
+        while True:
+            time.sleep(5)
+            try:
+                local = self.stt.backend != "cloud"
+                game = usage.game_running() if config.get("unload_in_games") and local else ""
+                idle = not (self.rec.active or self.busy or self.jobs.qsize())
+                if game:
+                    state.gaming = game
+                    # straight away when the game starts; after that, once you've stopped using it a while
+                    if self.stt.ready and idle and (not self.told_game or time.time() - self.last_used > GAME_IDLE):
+                        self._unload(game)
+                elif state.gaming:
+                    state.gaming, self.told_game = "", ""
+                    if not self.stt.ready:
+                        self._load()
+            except Exception:
+                log.exception("game watch")
 
     def _progress(self, msg):
         if msg:
@@ -114,8 +160,11 @@ class App:
             self._cancel()
             return
         if not self.stt.ready:
-            osd.show(self.stt.error or self.stt.progress or "Still loading the speech model…", "busy", 3)
-            return
+            if state.gaming and not self.stt.error:  # stepped out for a game: load it back while you talk
+                threading.Thread(target=self._load, daemon=True).start()
+            else:
+                osd.show(self.stt.error or self.stt.progress or "Still loading the speech model…", "busy", 3)
+                return
         if self.rec.active:
             if self.toggled:  # second tap ends a toggled recording
                 self._finish()
@@ -164,6 +213,7 @@ class App:
     def _finish(self):
         mode = self.mode
         pcm, secs, peak = self.rec.stop()
+        released = time.time()
         self.hotkeys.unregister("cancel")
         self.mode, self.toggled = None, False
         beep("stop")
@@ -173,10 +223,22 @@ class App:
             return
         self.tray.set("busy", "Thinking…")
         osd.show("…", "busy", 0)
-        self.jobs.put((mode, pcm))
+        self.jobs.put((mode, pcm, secs, released))
+
+    def _ready_text(self):
+        key = config.get("agent_key").upper()
+        if not self.stt.ready and state.gaming:
+            return f"Game mode: press {key}, the model loads back while you talk"
+        where = {"vulkan": "GPU", "cpu": "CPU", "cloud": "cloud"}.get(self.stt.backend, "")
+        return f"Ready: hold {key} and talk" + (f" ({where})" if where else "")
 
     def _ready_again(self):
-        self.tray.set("ready", f"Ready: hold {config.get('agent_key').upper()} and talk")
+        self.tray.set("ready", self._ready_text())
+
+    def _language(self, mode):
+        """Commands are English; the typing key types in the chosen language (.en models only know English)."""
+        lang = config.get("dictate_language") if mode == "dictate" else config.get("language")
+        return "en" if ".en" in self.stt.model else (lang or "en")
 
     # ------------------------------------------------------------- commands
     def _worker(self):
@@ -186,24 +248,36 @@ class App:
         except Exception:
             pass
         while True:
-            mode, pcm = self.jobs.get()
+            mode, pcm, secs, released = self.jobs.get()
+            self.busy = True
             try:
-                text = self.stt.transcribe(pcm)
-                log.info("heard (%s): %r", mode, text)
+                waited = time.time()
+                while not self.stt.ready and not self.stt.error and time.time() - waited < 40:
+                    time.sleep(0.05)  # loading back after a game: it was started on the key press
+                t0 = time.time()
+                text = self.stt.transcribe(pcm, language=self._language(mode))
+                heard_in = time.time() - t0
+                log.info("heard (%s, %.2fs audio, %.2fs to text): %r", mode, secs, heard_in, text)
                 if not text:
                     osd.show("Didn't catch that", "info", 2)
                 elif mode == "dictate" and not re.match(engine.WAKE, engine.clean(text)):
                     osd.hide()
                     win.type_unicode(text + " ")
                 else:
-                    self.run_text(text, woke=mode == "agent")
+                    self.run_text(text, woke=mode == "agent", took=time.time() - released)
+                total = time.time() - released
+                state.timings = (state.timings + [{"stt": round(heard_in, 2), "total": round(total, 2),
+                                                   "audio": round(secs, 1)}])[-20:]
+                log.info("timing: %.2fs to text, %.2fs from key release to done", heard_in, total)
             except Exception as e:
                 log.exception("job failed")
                 osd.show(f"Something went wrong: {e}", "error", 5)
             finally:
+                self.busy = False
+                self.last_used = time.time()
                 self._ready_again()
 
-    def run_text(self, text, woke=True):
+    def run_text(self, text, woke=True, took=None):
         engine.CTX.raw, engine.CTX.last_target = text, None
         steps, woke = engine.plan(text, woke=woke)
         heard = re.sub(r"\s+", " ", text).strip()
@@ -213,7 +287,10 @@ class App:
             osd.show(f"Didn't understand: “{heard}”", "error", 3.5)
             return
         chips = " → ".join((s[:1].upper() + s[1:])[:40] for _, _, s in steps)
-        osd.show(f"“{heard}”   ✓ {chips}" if len(steps) > 1 or len(heard) > 40 else f"✓ {heard}", "ok", 2.5)
+        pill = f"“{heard}”   ✓ {chips}" if len(steps) > 1 or len(heard) > 40 else f"✓ {heard}"
+        if took is not None and config.get("show_timing"):
+            pill += f"   ·   {took:.1f} s"
+        osd.show(pill, "ok", 2.5)
         errors = []
         for i, (r, groups, _) in enumerate(steps):
             try:
@@ -239,6 +316,75 @@ class App:
         threading.Thread(target=go, daemon=True).start()
 
     # ------------------------------------------------------------- tray actions
+    def change_key(self, mode):
+        """Tray → Push-to-talk keys: press the new key, it works straight away."""
+        def go():
+            from . import dialogs
+            old = config.get(f"{mode}_key")
+            combo = dialogs.ask("pick-key", mode, old)
+            if not combo or combo == old:
+                return
+            other = "dictate" if mode == "agent" else "agent"
+            if combo == config.get(f"{other}_key"):
+                self.tray.notify(f"{combo.upper()} is already the {'typing' if other == 'dictate' else 'commands'} key")
+                return
+            self.hotkeys.unregister(mode)
+            if self.hotkeys.register(mode, combo):
+                config.set(f"{mode}_key", combo)
+                state.hotkeys[mode] = True
+                osd.show(f"{'Commands' if mode == 'agent' else 'Typing'} key is now {combo.upper()}", "ok", 3)
+                self._ready_again()
+            else:
+                state.hotkeys[mode] = self.hotkeys.register(mode, old)
+                self.tray.notify(f"{combo.upper()} is taken by another app, kept {old.upper()}")
+        threading.Thread(target=go, daemon=True).start()
+
+    def set_model(self, model):
+        """Tray → Speech model: switch (downloading it first if needed)."""
+        def go():
+            if model in speech.CLOUD and not speech.api_key(model):
+                from . import dialogs
+                key = dialogs.ask("api-key", model)
+                if not key:
+                    return
+                speech.set_api_key(model, key)
+            if model == config.get("model") and self.stt.ready:
+                return
+            config.set("model", model)
+            with self.load_lock:
+                self.stt.stop()
+                self.stt = speech.make(on_progress=self._progress)
+                state.stt, state.usage = self.stt, {}
+            if self._load():
+                name = speech.MODELS.get(model, speech.CLOUD.get(model, (model,)))[0].split(":")[0].split(" (")[0]
+                osd.show(f"Speech model: {name}", "ok", 3)
+                self.check_language()
+        threading.Thread(target=go, daemon=True).start()
+
+    def set_cloud_key(self, provider):
+        def go():
+            from . import dialogs
+            key = dialogs.ask("api-key", provider)
+            if key is None:
+                return
+            speech.set_api_key(provider, key)
+            self.tray.notify("API key saved" if key else "API key removed")
+            if config.get("model") == provider:
+                with self.load_lock:
+                    self.stt.stop()
+                    self.stt = speech.make(on_progress=self._progress)
+                    state.stt = self.stt
+                self._load()
+        threading.Thread(target=go, daemon=True).start()
+
+    def delete_models(self):
+        freed = speech.delete_unused()
+        self.tray.notify(f"Deleted unused models: {freed} MB freed" if freed else "No unused models")
+
+    def check_language(self):
+        if config.get("dictate_language") != "en" and ".en" in config.get("model"):
+            self.tray.notify("Typing in Hindi needs the Best model or a cloud model: tray → Speech model")
+
     def open_file(self, path):
         paths.ensure()
         if not path.exists():
@@ -259,7 +405,7 @@ class App:
 
     def check_updates(self, interactive=False):
         def go():
-            if self.rec.active:
+            if self.rec.active or self.busy:
                 return
             result = updater.check(self.tray.notify, before_install=self.stt.stop)
             if interactive:
@@ -294,6 +440,8 @@ def setup_logging():
 def main():
     setup_logging()
     log.info("%s %s starting (%s)", APP_NAME, __version__, sys.executable)
+    win.dpi_aware()          # crisp tray menu and pill on scaled screens
+    win.follow_theme_menus()  # dark menus when Windows is dark
     if not win.single_instance(APP_ID):
         import ctypes
         ctypes.windll.user32.MessageBoxW(None, f"{APP_NAME} is already running: look for its icon by the clock.",

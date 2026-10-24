@@ -123,9 +123,10 @@ section h2{margin:0;font-size:18px}section p.i{margin:2px 0 10px;color:var(--sof
 <nav id="nav"></nav><div id="groups"></div>
 <section id="recentbox"><h2>🕘 What you said lately</h2><p class="i">✓ ran · ✗ not understood (those are what "export my voice history" sends to the AI)</p><div class="recent"><ul id="recent"></ul></div></section>
 <section><h2>🛠️ Setup tips</h2>
-<div class="r"><div class="say">Discord inside games</div><div class="d">Discord's own shortcuts only work while Discord is in front, so the agent flicks to Discord and back, which can kick you out of a fullscreen game. Fix: Discord → Settings → Keybinds → add <b>Toggle Mute</b> = <kbd>Ctrl+Shift+Alt+M</kbd> and <b>Toggle Deafen</b> = <kbd>Ctrl+Shift+Alt+D</kbd>, then in the tray menu tick <b>Discord keybinds</b>.</div></div>
-<div class="r"><div class="say">"Clip that"</div><div class="d">Needs Instant Replay on: NVIDIA app → Alt+Z → Instant Replay → On. (Using Xbox Game Bar instead? Switch it in the tray menu.)</div></div>
+<div class="r"><div class="say">Discord inside games</div><div class="d">Discord's own shortcuts only work while Discord is in front, so the agent flicks to Discord and back, which can kick you out of a fullscreen game. Fix: Discord → Settings → Keybinds → add <b>Toggle Mute</b> = <kbd>Ctrl+Shift+Alt+M</kbd> and <b>Toggle Deafen</b> = <kbd>Ctrl+Shift+Alt+D</kbd>, then tray → Optional features → tick <b>Discord keybinds</b>.</div></div>
+<div class="r"><div class="say">"Clip that"</div><div class="d">Needs Instant Replay on: NVIDIA app → Alt+Z → Instant Replay → On. (Using Xbox Game Bar instead? Tray → Optional features → Clips with.)</div></div>
 <div class="r"><div class="say">Doesn't react inside a game</div><div class="d">Some games run as administrator, and Windows blocks normal apps from sending keys to them. Right-click the Voice Agent shortcut → Run as administrator.</div></div>
+<div class="r"><div class="say">Another key, a lighter model, spoken answers, Hindi typing</div><div class="d">All in the tray menu (right-click the icon by the clock): Push-to-talk keys, Speech model (with how much memory each uses), Optional features. Everything extra is off until you tick it.</div></div>
 <div class="r"><div class="say">Hears the wrong words</div><div class="d">Use the export-for-AI steps above. Or speak a little slower and closer to the mic, and pick the right mic in the tray menu.</div></div>
 </section>
 <footer>{{APP}} {{VERSION}} · it updates itself · tray icon → Check for updates</footer>

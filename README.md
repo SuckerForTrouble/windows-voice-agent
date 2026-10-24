@@ -37,8 +37,20 @@ That's it. It starts with Windows and **updates itself**.
 | Say **"check my setup"** | tests everything again |
 
 The **tray icon** (by the clock, maybe behind the **^** arrow) shows what it's doing:
-🔵 ready · 🔴 listening · 🟠 thinking · ⚪ loading. Right-click it for every setting:
-microphone, spoken answers, beeps, Discord keybinds, clips, start with Windows.
+🔵 ready · 🔴 listening · 🟠 thinking · ⚪ loading.
+
+## Settings: right-click the tray icon
+
+Out of the box it's the light setup: push-to-talk, the pill at the top of the screen, and beeps.
+Everything else is off until you tick it.
+
+| Menu | What's there |
+|---|---|
+| **Push-to-talk keys** | Click one, press the key you want (F8, Pause, Ctrl+Alt+Space…). Works straight away. |
+| **Speech model** | **Fast / Balanced / Best**, each with its memory use and download size. The top line shows what the one in use *really* uses on your PC, and how long your last command took. Also **cloud** speech (Groq or OpenAI, your own API key, stored encrypted; your recordings go to them), and **Delete unused models**. |
+| **Microphone** | Pick which mic it listens to. |
+| **Optional features** | Spoken answers · the pill · beeps · how long each command took · **free the GPU while a game runs** (on: the model leaves graphics memory when a game starts, and loads back while you talk when you press the key) · typing language (**Hindi**) · Discord keybinds · clips with NVIDIA or Xbox. |
+| **Teach it my voice** | The AI trick below. |
 
 Talk normally. "Can you open YouTube and search for lofi beats please" works. So does
 chaining: "new tab, type hello, press enter".
@@ -62,24 +74,29 @@ every week or two.
 - **Discord inside games**: Discord's shortcuts only work while Discord is in front, so the
   agent flicks to Discord and back, which can pull you out of a fullscreen game. Fix: Discord →
   Settings → Keybinds → add **Toggle Mute** = `Ctrl+Shift+Alt+M` and **Toggle Deafen** =
-  `Ctrl+Shift+Alt+D`, then tray → Settings → tick **Discord keybinds**.
+  `Ctrl+Shift+Alt+D`, then tray → Optional features → tick **Discord keybinds**.
 - **"Clip that"**: turn on Instant Replay in the NVIDIA app (press `Alt+Z` → Instant Replay).
-  Using Xbox Game Bar instead? Tray → Settings → Clips with Xbox Game Bar.
+  Using Xbox Game Bar instead? Tray → Optional features → Clips with → Xbox Game Bar.
+- **Typing in Hindi**: tray → Optional features → Typing language → Hindi (needs the **Best**
+  model or cloud). Commands stay English, but Hinglish works through the AI trick:
+  `say: spotify kholo -> open spotify`.
 - **Stremio**: install the [Stremio app](https://www.stremio.com/downloads). Without it, movies open on web.stremio.com.
 
 ## When something's off
 
-- **Nothing happens when I press F9**: say or click "check my setup". If another app uses F9,
-  tray → Settings → Open the settings file, change `"agent_key": "f9"` to e.g. `"f8"` or
-  `"ctrl+alt+space"`, save, then tray → Restart.
+- **Nothing happens when I press F9**: say or click "check my setup". If another app uses F9:
+  tray → Push-to-talk keys → click it, and press another key.
 - **It hears the wrong words**: do the AI trick above, and check the right mic is picked (tray → Microphone).
 - **Commands do nothing inside one particular game**: that game runs as administrator. Right-click
   the Windows Voice Agent shortcut → Run as administrator.
 - **Slow, or "running on the CPU" in the setup check**: update your NVIDIA driver and restart
-  the agent. Still slow? Tray → Settings → Open the settings file → change `"model"` to
-  `"small.en-q5_1"`, save, restart (smaller and faster, a bit less accurate).
+  the agent. The setup check's **Speed** line shows how long commands take. Still slow?
+  Tray → Speech model → **Balanced** or **Fast** (lighter, a bit less accurate).
+- **The first command in a game takes a few seconds**: that's the model loading back after it
+  stepped out of graphics memory for the game. Rather keep it loaded? Tray → Optional
+  features → untick "Free the GPU while a game runs".
 - **Antivirus complains**: apps built with Python sometimes get flagged by mistake. Allow it.
-- **Send a log to whoever gave you this**: tray → Open data folder → `logs`.
+- **Send a log to whoever gave you this**: tray → More → Open data folder → `logs`.
 
 **Uninstall**: Windows Settings → Apps → Windows Voice Agent → Uninstall. Your settings,
 history and the speech model stay in `%LOCALAPPDATA%\WindowsVoiceAgent`. Delete that folder

@@ -1,7 +1,8 @@
 """WindowsVoiceAgent.exe            the agent (tray icon)
    … --try "open spotify"         what a phrase would do (nothing runs)
    … --list                       every command
-   … --selftest out.json          build check: imports, routing, whisper (used by CI)"""
+   … --selftest out.json          build check: imports, routing, whisper (used by CI)
+   … --dialog pick-key|api-key …  the tray's small windows"""
 import json
 import sys
 import time
@@ -56,6 +57,29 @@ def selftest(out, stt_model=None, wav=None):
         if got != case[1]:
             bad.append(case[0])
     res["routing"] = {"cases": len(CASES), "failed": bad}
+    try:  # every tray menu label, tick and submenu builds (as when it's clicked)
+        from .tray import Tray
+
+        class _App:
+            def __getattr__(self, name):
+                return lambda *a, **k: None
+
+        def walk(menu, depth=0):
+            n = 0
+            for item in menu.items:
+                _ = (item.text, item.checked, item.enabled)
+                n += 1
+                if item.submenu:
+                    n += walk(item.submenu, depth + 1)
+            return n
+        res["tray"] = f"ok: {walk(Tray(_App()).icon.menu)} items"
+    except Exception as e:  # noqa: BLE001
+        res["tray"] = f"{type(e).__name__}: {e}"
+    try:  # the setup check runs through (here without a mic or GPU, so some say so)
+        from . import checkup
+        res["checkup"] = {r["name"]: f"{r['status']}: {r['detail']}" for r in checkup.run_all()}
+    except Exception as e:  # noqa: BLE001
+        res["checkup"] = f"{type(e).__name__}: {e}"
     for backend in ("vulkan", "cpu"):
         exe = paths.WHISPER / backend / "whisper-server.exe"
         res["whisper"][backend] = "present" if exe.exists() else "missing"
@@ -77,7 +101,7 @@ def selftest(out, stt_model=None, wav=None):
             res["whisper"]["error"] = w.error or "did not start"
     with open(out, "w", encoding="utf-8") as f:
         json.dump(res, f, indent=2)
-    ok = all(v == "ok" for v in res["imports"].values()) and not bad
+    ok = all(v == "ok" for v in res["imports"].values()) and not bad and str(res["tray"]).startswith("ok")
     return 0 if ok else 1
 
 
@@ -90,6 +114,9 @@ def main():
         except Exception:
             time.sleep(2)
         args = args[2:]
+    if args[:1] == ["--dialog"]:  # a small window the tray asked for (see dialogs.py)
+        from . import dialogs
+        return dialogs.run(*args[1:])
     if args[:1] in (["--try"], ["--list"], ["--selftest"]):
         _console()
     if args[:1] == ["--try"]:

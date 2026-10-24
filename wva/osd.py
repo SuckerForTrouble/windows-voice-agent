@@ -50,6 +50,8 @@ def _loop():
     style = user32.GetWindowLongW(hwnd, GWL_EXSTYLE)
     # WS_EX_NOACTIVATE | WS_EX_TOOLWINDOW | WS_EX_TRANSPARENT | WS_EX_LAYERED | WS_EX_TOPMOST
     user32.SetWindowLongW(hwnd, GWL_EXSTYLE, style | 0x08000000 | 0x80 | 0x20 | 0x80000 | 0x8)
+    from . import win
+    win.modern_window(hwnd, dark=True)  # rounded corners on Windows 11
     timer = [None]
 
     def off():
