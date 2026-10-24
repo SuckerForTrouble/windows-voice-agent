@@ -96,12 +96,21 @@ jobs:
           Copy-Item $srv.FullName whisper-bin\cpu\
           Get-ChildItem $srv.DirectoryName -Filter *.dll | Copy-Item -Destination whisper-bin\cpu\
 
+      - name: Build the mouse side-button helper
+        shell: pwsh
+        run: |
+          cmake -S native\mouse-buttons -B mbuild
+          cmake --build mbuild --config Release
+          New-Item -ItemType Directory -Force helpers | Out-Null
+          Copy-Item mbuild\Release\mouse-buttons.exe helpers\
+
       - name: Build the app
         shell: pwsh
         run: |
           pyinstaller --noconfirm --clean --windowed --name WindowsVoiceAgent --icon assets\icon.ico `
             --collect-all winrt --collect-submodules pycaw --hidden-import pystray._win32 run_agent.py
           Copy-Item -Recurse whisper-bin dist\WindowsVoiceAgent\whisper
+          Copy-Item -Recurse helpers dist\WindowsVoiceAgent\helpers
           Get-ChildItem -Recurse dist\WindowsVoiceAgent\whisper | Select-Object FullName, Length
 
       - name: Cached test models
@@ -124,6 +133,7 @@ jobs:
           Get-Content selftest.json
           $r = Get-Content selftest.json | ConvertFrom-Json
           if ($p.ExitCode -ne 0) { Get-Content "$env:LOCALAPPDATA\WindowsVoiceAgent\logs\*" -ErrorAction SilentlyContinue; throw "self-test failed" }
+          if ($r.helpers.'mouse-buttons' -eq "missing") { throw "mouse-buttons.exe is missing from the build" }
           foreach ($m in $r.speech.PSObject.Properties) {
             if ($m.Value.heard -notmatch "spotify") { Get-Content "$env:LOCALAPPDATA\WindowsVoiceAgent\logs\*" -ErrorAction SilentlyContinue; throw "$($m.Name) heard: '$($m.Value.heard)' $($m.Value.error)" }
           }

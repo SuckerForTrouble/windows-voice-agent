@@ -41,6 +41,7 @@ Name: "desktopicon"; Description: "Put a shortcut on the Desktop"; Flags: unchec
 ; old program files go first, so nothing from a previous version lingers (your settings live elsewhere)
 Type: filesandordirs; Name: "{app}\_internal"
 Type: filesandordirs; Name: "{app}\whisper"
+Type: filesandordirs; Name: "{app}\helpers"
 
 [Files]
 Source: "..\dist\WindowsVoiceAgent\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs

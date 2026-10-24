@@ -56,13 +56,29 @@ def pick_key(out, which, current):
     tk, root = _window("Change key")
     label = {"agent": "commands", "dictate": "typing"}.get(which, which)
     tk.Label(root, text=f"Press the key for {label}", bg="#1d2029", fg="#e8eaf0", font=("Segoe UI", 15, "bold")).pack()
-    tk.Label(root, text=f"Now: {current.upper()}   ·   F-keys, Pause, Insert, or a combination like Ctrl+Alt+Space",
+    tk.Label(root, text=f"Now: {hotkey.label(current)}   ·   F-keys, Pause, Insert, or a combination like Ctrl+Alt+Space",
              bg="#1d2029", fg="#a2a9b8", font=("Segoe UI", 10)).pack(pady=(6, 14))
     shown = tk.Label(root, text="…", bg="#262a39", fg="#8b95ff", font=("Segoe UI", 18, "bold"), width=22, pady=8)
     shown.pack()
     note = tk.Label(root, text="Esc cancels", bg="#1d2029", fg="#a2a9b8", font=("Segoe UI", 10))
     note.pack(pady=(12, 0))
     result = {}
+
+    def use(combo):
+        result["combo"] = combo
+        shown.config(text=hotkey.label(combo))
+        note.config(text="Saved", fg="#46a758")
+        root.after(700, root.destroy)
+
+    # Mouse side buttons can't be pressed into a window as a key, so they get buttons here.
+    tk.Label(root, text="or use a mouse side button (it stops doing Back / Forward in browsers):",
+             bg="#1d2029", fg="#a2a9b8", font=("Segoe UI", 10)).pack(pady=(16, 6))
+    row = tk.Frame(root, bg="#1d2029")
+    row.pack()
+    for combo in hotkey.MOUSE:
+        tk.Button(row, text=hotkey.label(combo), command=lambda c=combo: use(c), font=("Segoe UI", 10),
+                  bg="#262a39", fg="#e8eaf0", activebackground="#34384a", activeforeground="#ffffff",
+                  relief="flat", padx=12, pady=6).pack(side="left", padx=4)
 
     def down(e):
         k = e.keysym.lower()
@@ -81,10 +97,7 @@ def pick_key(out, which, current):
         if not mods and (len(k) == 1 or k in ("space", "enter", "tab", "backspace", "delete", "up", "down", "left", "right")):
             note.config(text=f"{k.upper()} alone would stop it working for typing: add Ctrl, Alt or Win", fg="#f76b15")
             return
-        result["combo"] = combo
-        shown.config(text=combo.upper().replace("+", " + "))
-        note.config(text="Saved", fg="#46a758")
-        root.after(700, root.destroy)
+        use(combo)
 
     root.bind("<KeyPress>", down)
     root.focus_force()

@@ -6,7 +6,7 @@ import os
 import sys
 import time
 
-from . import APP_NAME, __version__, apps, config, paths, state, ui
+from . import APP_NAME, __version__, apps, config, hotkey, paths, state, ui
 from .engine import CTX
 
 OK, WARN, FAIL = "ok", "warn", "fail"
@@ -85,11 +85,15 @@ def c_hotkeys():
     bad = [m for m, ok in state.hotkeys.items() if not ok]
     if not state.hotkeys:
         return WARN, "Not registered yet.", "Restart the app from the tray."
+    mouse_bad = [m for m in bad if config.get(f"{m}_key") in hotkey.MOUSE]
+    if mouse_bad:
+        return FAIL, "The mouse side-button helper didn't start.", \
+            "Update or reinstall the app (the helper is part of it), or pick a keyboard key: tray → Push-to-talk keys."
     if bad:
-        keys = ", ".join(config.get(f"{m}_key").upper() for m in bad)
+        keys = ", ".join(hotkey.label(config.get(f"{m}_key")) for m in bad)
         return FAIL, f"Another app already uses {keys}.", \
             "Tray → Push-to-talk keys → change…, and press a free key (F8, Pause, Ctrl+Alt+Space…)."
-    return OK, f"Hold {config.get('agent_key').upper()} for commands, {config.get('dictate_key').upper()} to type", ""
+    return OK, f"Hold {hotkey.label(config.get('agent_key'))} for commands, {hotkey.label(config.get('dictate_key'))} to type", ""
 
 
 def c_routing():
@@ -264,7 +268,7 @@ kbd{{border:1px solid var(--line);border-bottom-width:2px;border-radius:6px;padd
 </style></head><body><main>
 <h1>🩺 Setup check</h1><div class="sub">{APP_NAME} {__version__} · {n_ok} of {len(results)} fine · {time.strftime('%d %b %Y %H:%M')}</div>
 <table>{rows}</table>
-<div class="next"><b>Next:</b> hold <kbd>{config.get('agent_key').upper()}</kbd>, say <i>"what can I say"</i>, let go. That opens the voice guide.
+<div class="next"><b>Next:</b> hold <kbd>{hotkey.label(config.get('agent_key'))}</kbd>, say <i>"what can I say"</i>, let go. That opens the voice guide.
 Fixed something above? Say <i>"check my setup"</i> again.</div>
 <div class="credit">made by profane for Billa Janta Party</div>
 </main></body></html>"""

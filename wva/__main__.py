@@ -83,6 +83,16 @@ def selftest(out, stt_model=None, wav=None):
     for backend in ("vulkan", "cpu"):
         for name in ("whisper-server", "parakeet-server"):
             res["whisper"][f"{backend}/{name}"] = "present" if (paths.WHISPER / backend / f"{name}.exe").exists() else "missing"
+    exe = paths.INSTALL / "helpers" / "mouse-buttons.exe"  # installs its mouse hook once and says "ok"
+    if not exe.exists():
+        res["helpers"] = {"mouse-buttons": "missing"}
+    else:
+        import subprocess
+        try:
+            r = subprocess.run([str(exe), "--check"], capture_output=True, text=True, timeout=20, creationflags=0x08000000)
+            res["helpers"] = {"mouse-buttons": (r.stdout.strip() or r.stderr.strip() or f"exit {r.returncode}")}
+        except Exception as e:  # noqa: BLE001
+            res["helpers"] = {"mouse-buttons": f"{type(e).__name__}: {e}"}
     if stt_model and wav:  # e.g. "tiny.en,parakeet-tdt-0.6b-v3-q8_0": each model hears the WAV on the CPU
         import wave
 

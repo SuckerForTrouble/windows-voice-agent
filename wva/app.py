@@ -15,8 +15,8 @@ import sys
 import threading
 import time
 
-from . import (APP_ID, APP_NAME, __version__, apps, config, engine, history, osd, paths, speak, state, system, tuning, ui,
-               updater, usage, win)
+from . import (APP_ID, APP_NAME, __version__, apps, config, engine, history, hotkey, osd, paths, speak, state, system,
+               tuning, ui, updater, usage, win)
 from . import rules  # noqa: F401  (registers the commands)
 from . import stt as speech
 from .recorder import Recorder
@@ -106,7 +106,7 @@ class App:
             ok = self.hotkeys.register(mode, config.get(f"{mode}_key"))
             state.hotkeys[mode] = ok
             if not ok:
-                msg = f"{config.get(f'{mode}_key').upper()} is taken by another app: tray → Push-to-talk keys to pick another."
+                msg = f"{hotkey.label(config.get(f'{mode}_key'))} is taken by another app: tray → Push-to-talk keys to pick another."
                 self.tray.notify(msg)
                 log.warning(msg)
 
@@ -124,7 +124,7 @@ class App:
             return False
         self._ready_again()
         if not state.gaming:
-            osd.show(f"Ready: hold {config.get('agent_key').upper()} and talk", "ok", 3)
+            osd.show(f"Ready: hold {hotkey.label(config.get('agent_key'))} and talk", "ok", 3)
         threading.Thread(target=usage.refresh, args=(self.stt,), daemon=True).start()
         return True
 
@@ -135,7 +135,7 @@ class App:
         if self.told_game != game:
             self.told_game = game
             osd.show(f"{game} is running: the speech model stepped out of graphics memory. "
-                     f"Press {config.get('agent_key').upper()} any time, it loads back while you talk.", "info", 7)
+                     f"Press {hotkey.label(config.get('agent_key'))} any time, it loads back while you talk.", "info", 7)
         log.info("unloaded for %s", game)
 
     def _watch_games(self):
@@ -235,7 +235,7 @@ class App:
         self.jobs.put((mode, pcm, secs, released))
 
     def _ready_text(self):
-        key = config.get("agent_key").upper()
+        key = hotkey.label(config.get("agent_key"))
         if not self.stt.ready and state.gaming:
             return f"Game mode: press {key}, the model loads back while you talk"
         where = {"vulkan": "GPU", "cpu": "CPU", "cloud": "cloud"}.get(self.stt.backend, "")
@@ -341,17 +341,18 @@ class App:
                 return
             other = "dictate" if mode == "agent" else "agent"
             if combo == config.get(f"{other}_key"):
-                self.tray.notify(f"{combo.upper()} is already the {'typing' if other == 'dictate' else 'commands'} key")
+                self.tray.notify(f"{hotkey.label(combo)} is already the {'typing' if other == 'dictate' else 'commands'} key")
                 return
             self.hotkeys.unregister(mode)
             if self.hotkeys.register(mode, combo):
                 config.set(f"{mode}_key", combo)
                 state.hotkeys[mode] = True
-                osd.show(f"{'Commands' if mode == 'agent' else 'Typing'} key is now {combo.upper()}", "ok", 3)
+                osd.show(f"{'Commands' if mode == 'agent' else 'Typing'} key is now {hotkey.label(combo)}", "ok", 3)
                 self._ready_again()
             else:
                 state.hotkeys[mode] = self.hotkeys.register(mode, old)
-                self.tray.notify(f"{combo.upper()} is taken by another app, kept {old.upper()}")
+                why = "couldn't start the mouse helper" if combo in hotkey.MOUSE else "is taken by another app"
+                self.tray.notify(f"{hotkey.label(combo)} {why}, kept {hotkey.label(old)}")
         threading.Thread(target=go, daemon=True).start()
 
     def set_model(self, model):

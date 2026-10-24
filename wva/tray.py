@@ -6,7 +6,7 @@ import os
 
 import pystray
 
-from . import APP_NAME, config, osd, paths, state, stt
+from . import APP_NAME, config, hotkey, osd, paths, state, stt
 from .icon import icon_image
 
 
@@ -98,8 +98,8 @@ class Tray:
 
     def _key_items(self):
         M = pystray.MenuItem
-        return [M(lambda i: f"Commands key: {config.get('agent_key').upper()}   (change…)", lambda: self.app.change_key("agent")),
-                M(lambda i: f"Typing key: {config.get('dictate_key').upper()}   (change…)", lambda: self.app.change_key("dictate"))]
+        return [M(lambda i: f"Commands key: {hotkey.label(config.get('agent_key'))}   (change…)", lambda: self.app.change_key("agent")),
+                M(lambda i: f"Typing key: {hotkey.label(config.get('dictate_key'))}   (change…)", lambda: self.app.change_key("dictate"))]
 
     def _optional(self):
         M, S = pystray.MenuItem, pystray.Menu.SEPARATOR

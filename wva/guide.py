@@ -7,7 +7,7 @@ import json
 import os
 import re
 
-from . import APP_NAME, __version__, config, history, paths
+from . import APP_NAME, __version__, config, history, hotkey, paths
 from .engine import CTX, RULES
 
 # icon, a few plain words (the guide is for skimming: say less)
@@ -73,8 +73,8 @@ def _recent():
 
 
 def render(topic=""):
-    key = config.get("agent_key").upper()
-    dkey = config.get("dictate_key").upper()
+    key = hotkey.label(config.get("agent_key"))
+    dkey = hotkey.label(config.get("dictate_key"))
     data = {"groups": groups(), "recent": _recent(), "topic": topic or "", "starters": STARTERS}
     page = TEMPLATE
     for k, v in {"APP": APP_NAME, "VERSION": __version__, "KEY": key, "DKEY": dkey}.items():
@@ -155,7 +155,7 @@ footer{color:var(--soft);font-size:13px;text-align:center;margin-top:30px}
 <div class="r"><div class="say">Mute me on Discord</div><div class="d">Inside a game: in Discord → Settings → Keybinds add Toggle Mute = <b>Ctrl+Shift+Alt+M</b> and Toggle Deafen = <b>Ctrl+Shift+Alt+D</b>. Then tray → Optional features → tick <b>Discord keybinds</b>.</div></div>
 <div class="r"><div class="say">Clip that</div><div class="d">Turn on Instant Replay: press <b>Alt+Z</b> in the NVIDIA app. Xbox Game Bar instead? Tray → Optional features → Clips with.</div></div>
 <div class="r"><div class="say">Doesn't work in one game</div><div class="d">That game runs as admin. Right-click the Voice Agent shortcut → Run as administrator.</div></div>
-<div class="r"><div class="say">Other key, faster model, Hindi</div><div class="d">Tray → Push-to-talk keys · Speech model · Optional features. Extras are off until you tick them.</div></div>
+<div class="r"><div class="say">Other key, mouse button, faster model, Hindi</div><div class="d">Tray → Push-to-talk keys (a mouse side button works too) · Speech model · Optional features. Extras are off until you tick them.</div></div>
 <div class="r"><div class="say">Hears me wrong</div><div class="d">Say “export my voice history”, paste the file into Gemini or ChatGPT, copy its answer, say “import the AI answer”.</div></div>
 </details>
 <details class="more" id="recentbox"><summary><span class="ic">🕘</span><span class="nm">What you said lately</span><span class="ct" id="rc"></span></summary>

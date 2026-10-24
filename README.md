@@ -55,7 +55,7 @@ Everything else is off until you tick it.
 
 | Menu | What's there |
 |---|---|
-| **Push-to-talk keys** | Click one, press the key you want (F8, Pause, Ctrl+Alt+Space…). Works straight away. |
+| **Push-to-talk keys** | Click one, press the key you want (F8, Pause, Ctrl+Alt+Space…), or pick a **mouse side button** (back / forward). Works straight away. |
 | **Speech model** | **Fast / Balanced / Best** (Whisper) and **Parakeet** (fastest: about a tenth of a second per command even without a GPU; English, no Hindi), each with its memory use and download size. The top line shows what the one in use *really* uses on your PC, and how long your last command took. Also **cloud** speech (Groq or OpenAI, your own API key, stored encrypted; your recordings go to them), and **Delete unused models**. |
 | **Microphone** | Pick which mic it listens to. |
 | **Optional features** | Spoken answers · the pill and its **style** (Minimal, Advanced with a mic meter and timing, or Funky) · beeps · how long each command took · **free the GPU while a game runs** (on: the model leaves graphics memory when a game starts, and loads back while you talk when you press the key) · typing language (**Hindi**) · Discord keybinds · clips with NVIDIA or Xbox. |
@@ -94,7 +94,10 @@ every week or two.
 ## When something's off
 
 - **Nothing happens when I press F9**: say or click "check my setup". If another app uses F9:
-  tray → Push-to-talk keys → click it, and press another key.
+  tray → Push-to-talk keys → click it, and press another key (or pick a mouse side button).
+- **"Open Instagram" opens the website**: it opens the Instagram app if one is installed from the
+  Microsoft Store (same for Netflix, ChatGPT…). "Scroll Instagram" uses the website's Reels page;
+  in the app, open Reels yourself and say "doom scroll".
 - **It hears the wrong words**: do the AI trick above, and check the right mic is picked (tray → Microphone).
 - **Commands do nothing inside one particular game**: that game runs as administrator. Right-click
   the Windows Voice Agent shortcut → Run as administrator.

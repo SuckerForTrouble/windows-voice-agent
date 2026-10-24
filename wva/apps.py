@@ -223,6 +223,12 @@ def start_apps():
         return out
 
 
+def exact_start_app(name):
+    """An installed app called exactly this ('instagram' -> the Instagram app), else None."""
+    n = norm(name)
+    return next((k for k in start_apps() if norm(k) == n), None) if n else None
+
+
 def find_start_app(name):
     apps = start_apps()
     if not apps:
@@ -346,6 +352,12 @@ def resolve(name):
             return "path", str(p), n
         elif kind == "path":
             return "path", target, n
+    # An installed app beats our website for the same name: with the Instagram, Netflix or
+    # ChatGPT app installed, "open instagram" opens the app (it opened instagram.com before).
+    real = exact_start_app(n) if WINDOWS and n in SITES else None
+    if real:
+        k, t = start_apps()[real]
+        return k, t, real
     if n in SITES:
         return "url", SITES[n], n
     url = domain_url(n)
