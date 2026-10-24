@@ -43,10 +43,11 @@ class Tray:
     def _mic_items(self):
         from . import recorder
         M = pystray.MenuItem
-        items = [M("Windows default", self._set("mic", ""), checked=lambda i: not config.get("mic"), radio=True)]
+        items = [M("Windows default", self._set("mic", "", self.app.mic_changed), checked=lambda i: not config.get("mic"),
+                   radio=True)]
         try:
             for name in recorder.input_devices():
-                items.append(M(name, self._set("mic", name), checked=self._is("mic", name), radio=True))
+                items.append(M(name, self._set("mic", name, self.app.mic_changed), checked=self._is("mic", name), radio=True))
         except Exception:
             pass
         return items
@@ -113,7 +114,10 @@ class Tray:
                   checked=self._is("osd_style", sid), radio=True) for sid, label in osd.STYLES.items()])),
             M("Beeps", self._toggle("sounds"), checked=self._checked("sounds")),
             M("Show how long each command took", self._toggle("show_timing"), checked=self._checked("show_timing")),
-            M("Free the GPU while a game runs (model loads back when you press the key)",
+            M("Always listening: no key, say the call word first (the mic stays on)",
+              lambda: self.app.toggle_listen(), checked=self._checked("always_listen")),
+            M(lambda i: f"Call word: “{config.get('call_word').title()}”   (change…)", lambda: self.app.change_call_word()),
+            M("Free the GPU while a game runs (not while always listening)",
               self._toggle("unload_in_games"), checked=self._checked("unload_in_games")),
             S,
             M("Typing language", pystray.Menu(

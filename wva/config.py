@@ -20,6 +20,8 @@ DEFAULTS = {
     "osd_style": "minimal",  # minimal | advanced | funky (tray → Optional features → Pill style)
     "voice_replies": False,  # answers (time, weather…) read out loud as well as shown (opt-in)
     "show_timing": False,    # the pill says how long each command took (opt-in)
+    "always_listen": False,  # no key: the mic stays on and acts on phrases starting with the call word (opt-in)
+    "call_word": "computer",
     "unload_in_games": True,  # a game starts: the speech model leaves graphics memory until you press the key
     "auto_update": True,
     "start_with_windows": True,

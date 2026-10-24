@@ -30,6 +30,13 @@ GROUP_INFO = {
     "Timers": ("⏱️", "Set timers by voice."),
     "Voice agent": ("🧭", "Help, setup check, updates."),
 }
+# What's planned, shown folded at the bottom of the guide (keep README.md's list the same).
+ROADMAP = [('👋', 'A welcome window on first start', 'pick the speech model, keys, pill style and your default apps'),
+           ('🎵', 'Spotify plays the song itself', 'without popping up (needs Spotify Premium and a one-time login)'),
+           ('🪟', 'A Windows 11-style settings panel', 'toggle switches instead of the right-click menu'),
+           ('🗣️', 'Hindi voice commands', 'say commands in Hindi, not just type in it'),
+           ('⚡', 'Faster answers', "tuned from your setup check's Speed line"),
+           ('💬', 'Discord mute without switching to it', 'for people using Vesktop or Equibop')]
 # The first things to try. Each one is checked by the tests (tests/test_routing.py).
 STARTERS = [("🎵", "Open Spotify"), ("🪟", "Close Discord"), ("🔊", "Volume 30"), ("🎬", "Watch Interstellar"),
             ("⏱️", "Set a 10 minute timer"), ("⏭️", "Next song"), ("📸", "Take a screenshot"), ("🕒", "What time is it")]
@@ -75,7 +82,7 @@ def _recent():
 def render(topic=""):
     key = hotkey.label(config.get("agent_key"))
     dkey = hotkey.label(config.get("dictate_key"))
-    data = {"groups": groups(), "recent": _recent(), "topic": topic or "", "starters": STARTERS}
+    data = {"groups": groups(), "recent": _recent(), "topic": topic or "", "starters": STARTERS, "roadmap": ROADMAP}
     page = TEMPLATE
     for k, v in {"APP": APP_NAME, "VERSION": __version__, "KEY": key, "DKEY": dkey}.items():
         page = page.replace("{{" + k + "}}", html.escape(v))
@@ -122,7 +129,7 @@ summary .ct::after{content:"  ▸";}details[open] summary .ct::after{content:"  
 .k{float:right;font:600 12px Consolas,monospace;color:var(--soft);background:var(--chip);border-radius:6px;padding:2px 7px;margin-left:10px}
 .stuck{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:18px 20px;margin:26px 0 12px}
 .stuck div{padding:6px 0;font-size:17px}.stuck b{display:inline-block;min-width:190px}
-.more summary .nm{font-size:16px}.more .r{padding-left:22px}
+.more summary .nm{font-size:16px}.more .r{padding-left:22px}.more .say::before,.more .say::after{content:none}
 .recent li{list-style:none;padding:6px 18px;border-top:1px solid var(--line);font-size:15px}.recent ul{padding:0;margin:0}
 .ok{color:var(--ok)}.bad{color:var(--bad)}.t{color:var(--soft);font-size:13px;margin-right:8px}
 .hide{display:none}mark{background:var(--accent2);color:inherit;border-radius:4px}
@@ -151,13 +158,16 @@ footer{color:var(--soft);font-size:13px;text-align:center;margin-top:30px}
  <div><b>Want a setting</b> right-click the tray icon by the clock</div>
 </div>
 
-<details class="more"><summary><span class="ic">🛠️</span><span class="nm">Setup tips</span><span class="ct">5 tips</span></summary>
+<details class="more"><summary><span class="ic">🛠️</span><span class="nm">Setup tips</span><span class="ct">6 tips</span></summary>
 <div class="r"><div class="say">Mute me on Discord</div><div class="d">Inside a game: in Discord → Settings → Keybinds add Toggle Mute = <b>Ctrl+Shift+Alt+M</b> and Toggle Deafen = <b>Ctrl+Shift+Alt+D</b>. Then tray → Optional features → tick <b>Discord keybinds</b>.</div></div>
 <div class="r"><div class="say">Clip that</div><div class="d">Turn on Instant Replay: press <b>Alt+Z</b> in the NVIDIA app. Xbox Game Bar instead? Tray → Optional features → Clips with.</div></div>
 <div class="r"><div class="say">Doesn't work in one game</div><div class="d">That game runs as admin. Right-click the Voice Agent shortcut → Run as administrator.</div></div>
+<div class="r"><div class="say">Jarvis, open Spotify</div><div class="d">No key at all: tray → Optional features → Always listening, and pick your call word. The mic stays on; anything that doesn't start with the call word is thrown away unseen.</div></div>
 <div class="r"><div class="say">Other key, mouse button, faster model, Hindi</div><div class="d">Tray → Push-to-talk keys (a mouse side button works too) · Speech model · Optional features. Extras are off until you tick them.</div></div>
 <div class="r"><div class="say">Hears me wrong</div><div class="d">Say “export my voice history”, paste the file into Gemini or ChatGPT, copy its answer, say “import the AI answer”.</div></div>
 </details>
+<details class="more"><summary><span class="ic">🗺️</span><span class="nm">Coming later</span><span class="ct" id="rmc"></span></summary>
+<div id="roadmap"></div></details>
 <details class="more" id="recentbox"><summary><span class="ic">🕘</span><span class="nm">What you said lately</span><span class="ct" id="rc"></span></summary>
 <div class="recent"><ul id="recent"></ul></div></details>
 
@@ -179,6 +189,9 @@ D.groups.forEach((g,gi)=>{
  G.insertAdjacentHTML("beforeend",`<details data-g="${esc(g.name.toLowerCase())}"><summary><span class="ic">${g.icon}</span>`+
   `<span><span class="nm">${esc(g.name)}</span><br><span class="ds">${esc(g.intro)}</span></span>`+
   `<span class="ct">${g.rules.length} things</span></summary>${rows}</details>`)});
+document.getElementById("rmc").textContent=D.roadmap.length+" planned";
+D.roadmap.forEach(([i,t,d])=>document.getElementById("roadmap").insertAdjacentHTML("beforeend",
+ `<div class="r"><div style="font-weight:600;font-size:17px">${i} ${esc(t)}</div><div class="d">${esc(d)}</div></div>`));
 const R=document.getElementById("recent");
 if(!D.recent.length){document.getElementById("recentbox").classList.add("hide")}
 document.getElementById("rc").textContent=D.recent.length+" lately";

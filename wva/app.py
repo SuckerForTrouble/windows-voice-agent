@@ -15,8 +15,8 @@ import sys
 import threading
 import time
 
-from . import (APP_ID, APP_NAME, __version__, apps, config, engine, history, hotkey, osd, paths, speak, state, system,
-               tuning, ui, updater, usage, win)
+from . import (APP_ID, APP_NAME, __version__, apps, config, engine, history, hotkey, listen, osd, paths, speak, state,
+               system, tuning, ui, updater, usage, win)
 from . import rules  # noqa: F401  (registers the commands)
 from . import stt as speech
 from .recorder import Recorder
@@ -62,6 +62,8 @@ class App:
         self.load_lock = threading.Lock()
         self.last_used = 0.0
         self.told_game = ""
+        self.listener = None    # always listening (opt-in)
+        self.follow_until = 0.0  # after the call word alone: the next phrase is the command
         self.first_run = not paths.CONFIG.exists()
         osd.level_source = lambda: self.rec.level  # the pill's mic meter
 
@@ -126,6 +128,7 @@ class App:
         if not state.gaming:
             osd.show(f"Ready: hold {hotkey.label(config.get('agent_key'))} and talk", "ok", 3)
         threading.Thread(target=usage.refresh, args=(self.stt,), daemon=True).start()
+        self._sync_listener()
         return True
 
     def _unload(self, game):
@@ -144,7 +147,11 @@ class App:
             time.sleep(5)
             try:
                 local = self.stt.backend != "cloud"
-                game = usage.game_running() if config.get("unload_in_games") and local else ""
+                if config.get("always_listen") and local and not self.stt.ready and not self.stt.error:
+                    self._load()  # always listening needs the model loaded, game or not
+                    continue
+                unload = config.get("unload_in_games") and local and not config.get("always_listen")
+                game = usage.game_running() if unload else ""
                 idle = not (self.rec.active or self.busy or self.jobs.qsize())
                 if game:
                     state.gaming = game
@@ -239,7 +246,8 @@ class App:
         if not self.stt.ready and state.gaming:
             return f"Game mode: press {key}, the model loads back while you talk"
         where = {"vulkan": "GPU", "cpu": "CPU", "cloud": "cloud"}.get(self.stt.backend, "")
-        return f"Ready: hold {key} and talk" + (f" ({where})" if where else "")
+        call = f", or say “{config.get('call_word').title()} …”" if self.listener else ""
+        return f"Ready: hold {key} and talk{call}" + (f" ({where})" if where else "")
 
     def _ready_again(self):
         self.tray.set("ready", self._ready_text())
@@ -268,6 +276,9 @@ class App:
             mode, pcm, secs, released = self.jobs.get()
             self.busy = True
             try:
+                if mode == "listen":
+                    self._overheard(pcm, secs, released)
+                    continue
                 waited = time.time()
                 while not self.stt.ready and not self.stt.error and time.time() - waited < 40:
                     time.sleep(0.05)  # loading back after a game: it was started on the key press
@@ -293,6 +304,88 @@ class App:
                 self.busy = False
                 self.last_used = time.time()
                 self._ready_again()
+
+    # ------------------------------------------------------------- always listening
+    def _sync_listener(self):
+        """Open or close the always-on mic to match the settings (and what the model allows)."""
+        want = config.get("always_listen") and self.stt.ready and self.stt.backend != "cloud"
+        if want and not self.listener:
+            lst = listen.Listener(self._phrase, paused=lambda: self.rec.active)
+            try:
+                lst.start(config.get("mic"))
+                self.listener = lst
+                log.info("always listening for %r", config.get("call_word"))
+            except Exception as e:
+                self.tray.notify(f"Always listening couldn't open the mic: {e}")
+        elif not want and self.listener:
+            self.listener.stop()
+            self.listener = None
+        state.listening = bool(self.listener)
+        self._ready_again()
+
+    def _phrase(self, pcm):
+        """From the open mic's thread. While a command is still running, new phrases are
+        dropped rather than queued (nobody wants a backlog of overheard talk)."""
+        if self.jobs.qsize() < 2:
+            self.jobs.put(("listen", pcm, len(pcm) / 32000, time.time()))
+
+    def _overheard(self, pcm, secs, heard_at):
+        """A phrase the open mic caught: acted on only if it starts with the call word.
+        Anything else is dropped here, unseen: no pill, no history, no log of the words."""
+        if not self.stt.ready:
+            return
+        text = self.stt.transcribe(pcm, language=self._language("agent"))
+        word = config.get("call_word")
+        rest = listen.strip_call(text, word) if text else None
+        if rest is None and text and time.time() < self.follow_until:
+            rest = text  # the command that followed the call word on its own
+        if rest is None:
+            log.info("always listening: let %.1fs of speech go", secs)
+            return
+        if rest == "":
+            self.follow_until = time.time() + 6
+            beep("start")
+            osd.show(f"Listening… (you said “{word.title()}”)", "listen", 6)
+            return
+        self.follow_until = 0.0
+        log.info("call word, then: %r", rest)
+        self.run_text(rest, woke=True, took=time.time() - heard_at)
+
+    def toggle_listen(self):
+        on = not config.get("always_listen")
+        if on and self.stt.backend == "cloud":
+            self.tray.notify("Always listening needs a speech model on this PC (a cloud model would get everything "
+                             "said near the mic): tray → Speech model, pick Parakeet or Best first.")
+            return
+        config.set("always_listen", on)
+        self._sync_listener()
+        if on:
+            osd.show(f"Always listening: say “{config.get('call_word').title()}” first. The mic stays on; anything "
+                     "that doesn't start with the call word is thrown away.", "info", 7)
+        else:
+            osd.show("Always listening off: push-to-talk only", "info", 3)
+
+    def change_call_word(self):
+        def go():
+            from . import dialogs
+            word = dialogs.ask("call-word", config.get("call_word"))
+            if not word:
+                return
+            word = " ".join(re.findall(r"[a-z']+", word.lower()))
+            why = listen.call_word_ok(word)
+            if why:
+                self.tray.notify(f"“{word}” can't be the call word: {why}")
+                return
+            config.set("call_word", word)
+            self._ready_again()
+            osd.show(f"Call word: “{word.title()}”", "ok", 3)
+        threading.Thread(target=go, daemon=True).start()
+
+    def mic_changed(self):
+        if self.listener:  # reopen the always-on mic on the new microphone
+            self.listener.stop()
+            self.listener = None
+            self._sync_listener()
 
     def run_text(self, text, woke=True, took=None):
         engine.CTX.raw, engine.CTX.last_target = text, None

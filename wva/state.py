@@ -6,3 +6,4 @@ status = "Starting…"
 usage = {}          # the loaded model's measured {"ram": MB, "vram": MB}
 timings = []        # recent commands: {"stt": s, "total": s, "audio": s}
 gaming = ""         # the game running, while the model is unloaded for it
+listening = False   # always listening is on and the mic is open

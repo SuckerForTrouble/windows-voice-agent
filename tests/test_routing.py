@@ -101,6 +101,59 @@ def test_guide_starters_route():
     assert not bad, f"starter phrases that don't route: {bad}"
 
 
+def _frames(pcm):
+    from wva.listen import FRAME
+    return [pcm[i:i + FRAME * 2] for i in range(0, len(pcm) - FRAME * 2 + 1, FRAME * 2)]
+
+
+def _room(seconds, amp=120, seed=1):
+    import array
+    import random
+    r = random.Random(seed)
+    return array.array("h", (int(r.gauss(0, amp)) for _ in range(int(16000 * seconds)))).tobytes()
+
+
+def test_always_listening_detector():
+    """The voice detector on a real recording (tests/data/open_spotify.wav) in room noise."""
+    import array
+    import math
+    import wave
+
+    from wva.listen import Segmenter
+    with wave.open(os.path.join(os.path.dirname(__file__), "data", "open_spotify.wav")) as w:
+        speech = w.readframes(w.getnframes())
+
+    def phrases(pcm):
+        seg = Segmenter()
+        return [p for p in (seg.feed(f) for f in _frames(pcm)) if p]
+
+    assert phrases(_room(5)) == [], "room noise alone"
+    hum = array.array("h", (int(900 * math.sin(i / 16000 * 2 * math.pi * 50)) for i in range(16000 * 6))).tobytes()
+    assert phrases(_room(1) + hum) == [], "a steady hum (fan, AC) learnt as the room's noise"
+    one = phrases(_room(1.5) + speech + _room(1.5, seed=2))
+    assert len(one) == 1, f"one sentence -> {len(one)} phrases"
+    got, want = len(one[0]) / 32000, len(speech) / 32000
+    assert want - 0.3 < got < want + 1.2, f"phrase is {got:.2f}s, the sentence {want:.2f}s"
+    two = phrases(_room(1) + speech + _room(1.2, seed=3) + speech + _room(1.5, seed=4))
+    assert len(two) == 2, f"two sentences with a pause -> {len(two)} phrases"
+
+
+def test_call_word():
+    from wva.listen import call_word_ok, strip_call
+    cases = [("Jarvis, open Spotify.", "jarvis", "open Spotify."), ("Hey Jarvis open spotify", "jarvis", "open spotify"),
+             ("Jarvus, volume up", "jarvis", "volume up"), ("open spotify", "jarvis", None),
+             ("I told Jarvis to stop", "jarvis", None), ("Jarvis.", "jarvis", ""), ("Jarvis", "jarvis", ""),
+             ("Computer, volume up", "computer", "volume up"), ("Commuter volume up", "computer", "volume up"),
+             ("Okay computer, next song", "computer", "next song"), ("the computer is slow", "computer", None),
+             ("Hey Friday, what time is it", "hey friday", ", what time is it".lstrip(" ,")),
+             ("Billa, close discord", "billa", "close discord")]
+    for text, word, want in cases:
+        got = strip_call(text, word)
+        assert got == want, f"{text!r} with {word!r}: want {want!r}, got {got!r}"
+    assert call_word_ok("Jarvis") is None and call_word_ok("hey friday") is None
+    assert call_word_ok("play") and call_word_ok("bob") and call_word_ok("one two three four")
+
+
 def test_stremio_parse():
     from wva.extras import parse_show
     assert parse_show("breaking bad season 2 episode 3") == ("breaking bad", 2, 3)

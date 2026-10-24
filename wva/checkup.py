@@ -96,6 +96,18 @@ def c_hotkeys():
     return OK, f"Hold {hotkey.label(config.get('agent_key'))} for commands, {hotkey.label(config.get('dictate_key'))} to type", ""
 
 
+def c_listen():
+    word = config.get("call_word").title()
+    if not config.get("always_listen"):
+        return OK, "Off: push-to-talk only (tray → Optional features to turn it on)", ""
+    if state.listening:
+        return OK, f"On: say “{word}” first. The mic stays on; anything else is thrown away unseen.", ""
+    if state.stt and state.stt.backend == "cloud":
+        return FAIL, "On, but a cloud model is picked, so it isn't listening.", \
+            "Pick a model that runs on this PC (tray → Speech model → Parakeet or Best)."
+    return FAIL, "On, but the mic didn't open.", "Check the microphone (above), then tray → Restart."
+
+
 def c_routing():
     from .examples import CASES
     from .engine import plan
@@ -236,6 +248,7 @@ def c_admin():
 
 
 CHECKS = [("Speech model", c_speech), ("Speed", c_speed), ("Microphone", c_mic), ("Push-to-talk keys", c_hotkeys),
+          ("Always listening", c_listen),
           ("Every command routes", c_routing), ("Volume control", c_volume), ("Media controls (play/pause/what's playing)", c_media),
           ("Spotify", c_spotify), ("Discord", c_discord), ("Stremio", c_stremio), ("Steam & Epic games", c_games),
           ("Clips & recording", c_clips), ("NVIDIA GPU info", c_gpu), ("Wi-Fi & Bluetooth switches", c_radios),

@@ -58,7 +58,7 @@ Everything else is off until you tick it.
 | **Push-to-talk keys** | Click one, press the key you want (F8, Pause, Ctrl+Alt+Space…), or pick a **mouse side button** (back / forward). Works straight away. |
 | **Speech model** | **Fast / Balanced / Best** (Whisper) and **Parakeet** (fastest: about a tenth of a second per command even without a GPU; English, no Hindi), each with its memory use and download size. The top line shows what the one in use *really* uses on your PC, and how long your last command took. Also **cloud** speech (Groq or OpenAI, your own API key, stored encrypted; your recordings go to them), and **Delete unused models**. |
 | **Microphone** | Pick which mic it listens to. |
-| **Optional features** | Spoken answers · the pill and its **style** (Minimal, Advanced with a mic meter and timing, or Funky) · beeps · how long each command took · **free the GPU while a game runs** (on: the model leaves graphics memory when a game starts, and loads back while you talk when you press the key) · typing language (**Hindi**) · Discord keybinds · clips with NVIDIA or Xbox. |
+| **Optional features** | **Always listening**: no key, say your **call word** first ("Jarvis, open Spotify"); the mic stays on, and anything that doesn't start with the call word is thrown away unseen (needs a model on your PC, not cloud) · Spoken answers · the pill and its **style** (Minimal, Advanced with a mic meter and timing, or Funky) · beeps · how long each command took · **free the GPU while a game runs** (on: the model leaves graphics memory when a game starts, and loads back while you talk when you press the key) · typing language (**Hindi**) · Discord keybinds · clips with NVIDIA or Xbox. |
 | **Teach it my voice** | The AI trick below. |
 
 Talk normally. "Can you open YouTube and search for lofi beats please" works. So does
@@ -114,10 +114,21 @@ every week or two.
 history and the speech model stay in `%LOCALAPPDATA%\WindowsVoiceAgent`. Delete that folder
 to remove them too.
 
+## Coming later
+
+- 👋 **A welcome window on first start**: pick the speech model, keys, pill style and your default apps
+- 🎵 **Spotify plays the song itself**: without popping up (needs Spotify Premium and a one-time login)
+- 🪟 **A Windows 11-style settings panel**: toggle switches instead of the right-click menu
+- 🗣️ **Hindi voice commands**: say commands in Hindi, not just type in it
+- ⚡ **Faster answers**: tuned from your setup check's Speed line
+- 💬 **Discord mute without switching to it**: for people using Vesktop or Equibop
+
 ## Privacy
 
 - What you say is turned into text **on your PC**. No audio is ever uploaded.
-- The mic is only open while you hold (or have tapped) the key.
+- The mic is only open while you hold (or have tapped) the key, unless you turn on
+  **Always listening**. Then it stays open, but a phrase that doesn't start with your call word is
+  dropped on the spot: never shown, saved or logged.
 - The voice history stays on your PC. It only goes anywhere if *you* export it and paste it into an AI.
 - The app goes online only to download the speech model, check GitHub for updates, get the
   weather (wttr.in), look up movie names for Stremio (Stremio's own catalog), and open what you ask for.
