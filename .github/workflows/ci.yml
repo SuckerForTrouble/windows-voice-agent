@@ -1,0 +1,29 @@
+name: Tests
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  routing:
+    name: Routing tests (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install Windows dependencies
+        if: runner.os == 'Windows'
+        run: python -m pip install -r requirements.txt
+      - name: Routing tests
+        run: python tests/test_routing.py
+      - name: Everything imports on Windows
+        if: runner.os == 'Windows'
+        run: |
+          python -m wva --selftest selftest.json
+          type selftest.json

@@ -1,0 +1,131 @@
+name: Build & release
+
+# A tag like v0.2.0 builds the Windows app and publishes WindowsVoiceAgent-Setup.exe as
+# a GitHub release; every installed copy picks it up by itself. Run it by hand
+# (Actions -> Build & release -> Run workflow) for a test build without a release.
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+env:
+  WHISPER_SRC: v1.9.5          # whisper.cpp source tag for the Vulkan (GPU) build
+  WHISPER_BIN_RELEASE: b5454   # whisper.cpp release with the official CPU build
+
+jobs:
+  build:
+    runs-on: windows-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Version from the tag
+        id: v
+        shell: pwsh
+        run: |
+          if ($env:GITHUB_REF_TYPE -eq "tag") { $v = $env:GITHUB_REF_NAME.TrimStart("v") }
+          else { $v = (Select-String -Path wva/__init__.py -Pattern '__version__ = "(.+)"').Matches[0].Groups[1].Value + "-dev" }
+          (Get-Content wva/__init__.py) -replace '^__version__ = .*', "__version__ = `"$v`"" | Set-Content wva/__init__.py
+          "version=$v" >> $env:GITHUB_OUTPUT
+
+      - name: Routing tests
+        run: python tests/test_routing.py
+
+      - name: Python packages
+        run: python -m pip install -r requirements.txt pyinstaller
+
+      - name: Cached whisper.cpp builds
+        id: wcache
+        uses: actions/cache@v4
+        with:
+          path: whisper-bin
+          key: whisper-${{ env.WHISPER_SRC }}-${{ env.WHISPER_BIN_RELEASE }}-v1
+
+      - name: Install the Vulkan SDK
+        if: steps.wcache.outputs.cache-hit != 'true'
+        shell: pwsh
+        run: |
+          curl.exe -sSL -o "$env:RUNNER_TEMP\vulkan-sdk.exe" "https://sdk.lunarg.com/sdk/download/latest/windows/vulkan-sdk.exe"
+          Start-Process -Wait -FilePath "$env:RUNNER_TEMP\vulkan-sdk.exe" -ArgumentList "--accept-licenses","--default-answer","--confirm-command","install"
+          $sdk = (Get-ChildItem C:\VulkanSDK | Sort-Object Name | Select-Object -Last 1).FullName
+          "VULKAN_SDK=$sdk" >> $env:GITHUB_ENV
+          "$sdk\Bin" >> $env:GITHUB_PATH
+
+      - name: Build whisper-server for the GPU (Vulkan)
+        if: steps.wcache.outputs.cache-hit != 'true'
+        shell: pwsh
+        run: |
+          git clone --depth 1 --branch $env:WHISPER_SRC https://github.com/ggml-org/whisper.cpp wsrc
+          cmake -S wsrc -B wbuild -DGGML_VULKAN=ON -DBUILD_SHARED_LIBS=OFF -DGGML_NATIVE=OFF -DWHISPER_BUILD_TESTS=OFF -DWHISPER_SDL2=OFF
+          cmake --build wbuild --config Release --target whisper-server --parallel 4
+          New-Item -ItemType Directory -Force whisper-bin\vulkan | Out-Null
+          Copy-Item wbuild\bin\Release\whisper-server.exe whisper-bin\vulkan\
+          Get-ChildItem wbuild\bin\Release -Filter *.dll | Copy-Item -Destination whisper-bin\vulkan\
+          Copy-Item wsrc\LICENSE whisper-bin\LICENSE-whisper.cpp.txt
+
+      - name: Get the official CPU build (fallback without a GPU)
+        if: steps.wcache.outputs.cache-hit != 'true'
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release download $env:WHISPER_BIN_RELEASE --repo ggml-org/whisper.cpp --pattern whisper-bin-x64.zip --dir $env:RUNNER_TEMP
+          Expand-Archive "$env:RUNNER_TEMP\whisper-bin-x64.zip" "$env:RUNNER_TEMP\wcpu"
+          $srv = Get-ChildItem "$env:RUNNER_TEMP\wcpu" -Recurse -Filter whisper-server.exe | Select-Object -First 1
+          New-Item -ItemType Directory -Force whisper-bin\cpu | Out-Null
+          Copy-Item $srv.FullName whisper-bin\cpu\
+          Get-ChildItem $srv.DirectoryName -Filter *.dll | Copy-Item -Destination whisper-bin\cpu\
+
+      - name: Build the app
+        shell: pwsh
+        run: |
+          pyinstaller --noconfirm --clean --windowed --name WindowsVoiceAgent --icon assets\icon.ico `
+            --collect-all winrt --collect-submodules pycaw --hidden-import pystray._win32 run_agent.py
+          Copy-Item -Recurse whisper-bin dist\WindowsVoiceAgent\whisper
+          Get-ChildItem -Recurse dist\WindowsVoiceAgent\whisper | Select-Object FullName, Length
+
+      - name: Self-test the built app (imports, every phrase, speech on the CPU)
+        shell: pwsh
+        run: |
+          $models = "$env:LOCALAPPDATA\WindowsVoiceAgent\models"
+          New-Item -ItemType Directory -Force $models | Out-Null
+          curl.exe -sSL -o "$models\ggml-tiny.en.bin" https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-tiny.en.bin
+          $p = Start-Process -Wait -PassThru -FilePath dist\WindowsVoiceAgent\WindowsVoiceAgent.exe `
+            -ArgumentList "--selftest","$pwd\selftest.json","tiny.en","$pwd\tests\data\open_spotify.wav"
+          Get-Content selftest.json
+          $r = Get-Content selftest.json | ConvertFrom-Json
+          if ($p.ExitCode -ne 0) { Get-Content "$env:LOCALAPPDATA\WindowsVoiceAgent\logs\*" -ErrorAction SilentlyContinue; throw "self-test failed" }
+          if ($r.whisper.heard -notmatch "spotify") { Get-Content "$env:LOCALAPPDATA\WindowsVoiceAgent\logs\whisper.log"; throw "speech test heard: '$($r.whisper.heard)'" }
+
+      - name: Installer
+        shell: pwsh
+        run: |
+          $iscc = "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe"
+          if (!(Test-Path $iscc)) { choco install innosetup -y --no-progress | Out-Null }
+          & $iscc /Q "/DAppVersion=${{ steps.v.outputs.version }}" installer\wva.iss
+          if ($LASTEXITCODE -ne 0) { throw "installer build failed" }
+          Compress-Archive -Path dist\WindowsVoiceAgent\* -DestinationPath dist\WindowsVoiceAgent-portable.zip
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: WindowsVoiceAgent-${{ steps.v.outputs.version }}
+          path: |
+            dist/WindowsVoiceAgent-Setup.exe
+            dist/WindowsVoiceAgent-portable.zip
+
+      - name: Publish the release
+        if: github.ref_type == 'tag'
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $notes = "**New here?** Download **WindowsVoiceAgent-Setup.exe** below and run it. Windows may say it protected your PC: click *More info* → *Run anyway*.`n`nAlready installed? It updates itself within a minute of starting (or tray icon → *Check for updates*)."
+          gh release create $env:GITHUB_REF_NAME dist\WindowsVoiceAgent-Setup.exe dist\WindowsVoiceAgent-portable.zip `
+            --title "Windows Voice Agent $env:GITHUB_REF_NAME" --notes $notes --generate-notes
