@@ -6,3 +6,4 @@ dist/
 tests/.data/
 whisper-bin/
 selftest.json
+whisper/

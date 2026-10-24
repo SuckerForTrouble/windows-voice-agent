@@ -79,8 +79,7 @@ class App:
         apps.warm_up()
         system.restore_timers()
         self._register_keys()  # before the model: the keys work (and say "loading…") meanwhile
-        if config.get("auto_update"):
-            threading.Thread(target=lambda: (time.sleep(20), self.check_updates()), daemon=True).start()
+        threading.Thread(target=self._update_loop, daemon=True, name="updates").start()
         if self.first_run:
             osd.show(f"{APP_NAME} is getting ready. The first start downloads the speech model (~550 MB).", "busy", 0)
         if self._load() and self.first_run:
@@ -89,6 +88,15 @@ class App:
             time.sleep(2)
             self.do("guide.open_guide")
         threading.Thread(target=self._watch_games, daemon=True, name="games").start()
+
+    def _update_loop(self):
+        """20 s after start, then every 6 hours (a PC that stays on for days still gets
+        updates). Skipped while you're talking; the install itself takes ~10 s."""
+        time.sleep(20)
+        while True:
+            if config.get("auto_update"):
+                self.check_updates()
+            time.sleep(6 * 3600)
 
     def _register_keys(self):
         from .hotkey import Hotkeys

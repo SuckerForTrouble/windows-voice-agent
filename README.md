@@ -47,7 +47,7 @@ Everything else is off until you tick it.
 | Menu | What's there |
 |---|---|
 | **Push-to-talk keys** | Click one, press the key you want (F8, Pause, Ctrl+Alt+Space…). Works straight away. |
-| **Speech model** | **Fast / Balanced / Best**, each with its memory use and download size. The top line shows what the one in use *really* uses on your PC, and how long your last command took. Also **cloud** speech (Groq or OpenAI, your own API key, stored encrypted; your recordings go to them), and **Delete unused models**. |
+| **Speech model** | **Fast / Balanced / Best** (Whisper) and **Parakeet** (fastest: about a tenth of a second per command even without a GPU; English, no Hindi), each with its memory use and download size. The top line shows what the one in use *really* uses on your PC, and how long your last command took. Also **cloud** speech (Groq or OpenAI, your own API key, stored encrypted; your recordings go to them), and **Delete unused models**. |
 | **Microphone** | Pick which mic it listens to. |
 | **Optional features** | Spoken answers · the pill · beeps · how long each command took · **free the GPU while a game runs** (on: the model leaves graphics memory when a game starts, and loads back while you talk when you press the key) · typing language (**Hindi**) · Discord keybinds · clips with NVIDIA or Xbox. |
 | **Teach it my voice** | The AI trick below. |
@@ -91,7 +91,7 @@ every week or two.
   the Windows Voice Agent shortcut → Run as administrator.
 - **Slow, or "running on the CPU" in the setup check**: update your NVIDIA driver and restart
   the agent. The setup check's **Speed** line shows how long commands take. Still slow?
-  Tray → Speech model → **Balanced** or **Fast** (lighter, a bit less accurate).
+  Tray → Speech model → **Parakeet** (the fastest), or **Balanced** / **Fast**.
 - **The first command in a game takes a few seconds**: that's the model loading back after it
   stepped out of graphics memory for the game. Rather keep it loaded? Tray → Optional
   features → untick "Free the GPU while a game runs".
@@ -123,7 +123,7 @@ to remove them too.
 That runs the tests, bumps the version, tags and pushes. GitHub Actions builds the Windows
 app on a Windows machine, compiles whisper.cpp for the GPU (Vulkan), runs a self-test
 (every example phrase routes, and the built app transcribes `tests/data/open_spotify.wav`),
-builds the installer and publishes the release. Installed copies update themselves.
+builds the installer and publishes the release. Updates are checked 20 s after the app starts and then every 6 hours. Installed copies update themselves.
 `./release.sh minor` for a bigger bump. Test build without releasing: Actions → Build &
 release → Run workflow (the installer is attached to the run).
 
@@ -143,7 +143,7 @@ python3 -m wva --list                      # every command
 | `wva/actions.py`, `extras.py`, `system.py` | what commands do on Windows (Spotify, Discord, Stremio… in `extras`) |
 | `wva/apps.py` | open/close by name: Start menu, Store apps, Steam/Epic games, sites, process names |
 | `wva/app.py` | the running agent: tray, keys, mic → whisper → commands |
-| `wva/stt.py` | whisper-server (Vulkan GPU build, CPU fallback), model download |
+| `wva/stt.py` | speech models: whisper-server and our parakeet-server (`native/`, both GPU via Vulkan with a CPU fallback), cloud, model downloads |
 | `wva/guide.py`, `checkup.py`, `tuning.py` | voice guide, setup check, AI tuning export/import |
 | `wva/updater.py`, `installer/wva.iss` | self-update from GitHub releases, the installer |
 

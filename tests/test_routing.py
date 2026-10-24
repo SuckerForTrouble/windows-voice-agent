@@ -81,6 +81,19 @@ def test_tuning_lines():
         engine.TUNE_SAY.clear()
 
 
+def test_mishearings():
+    """What the recognisers (Parakeet especially, which takes no prompt) actually wrote."""
+    for text, want in [("Plus Discord from the tray.", ["quit <app> completely"]),
+                       ("Clothes chrome", ["close <app>"]),
+                       ("What's using my REM?", ["what is using RAM"]),
+                       ("REM", ["ram"]),
+                       ("Watch Breaking Bad Season 2 Episode 3 on Stremeo.", ["watch <movie | show> on Stremio"]),
+                       ("open stremyo", ["open <app | game | site | folder | settings page>"]),
+                       ("plus one for that idea", [])]:
+        got = [r.say for r, _, _ in route(text)]
+        assert got == want, f"{text!r}: want {want}, got {got}"
+
+
 def test_stremio_parse():
     from wva.extras import parse_show
     assert parse_show("breaking bad season 2 episode 3") == ("breaking bad", 2, 3)

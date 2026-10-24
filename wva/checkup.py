@@ -52,7 +52,7 @@ def c_speed():
     detail = f"Last {len(t)} commands: {stt_avg:.2f} s to turn speech into text, {total_avg:.2f} s from letting go to done"
     if stt_avg > 1.5:
         fix = ("It's running on the CPU: update the NVIDIA driver, then restart the agent." if state.stt and state.stt.backend == "cpu"
-               else "Try a lighter model: tray → Speech model → Balanced or Fast.")
+               else "Try Parakeet, the fastest: tray → Speech model → Parakeet.")
         return WARN, detail, fix
     return OK, detail, ""
 

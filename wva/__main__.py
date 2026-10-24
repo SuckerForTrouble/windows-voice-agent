@@ -81,24 +81,27 @@ def selftest(out, stt_model=None, wav=None):
     except Exception as e:  # noqa: BLE001
         res["checkup"] = f"{type(e).__name__}: {e}"
     for backend in ("vulkan", "cpu"):
-        exe = paths.WHISPER / backend / "whisper-server.exe"
-        res["whisper"][backend] = "present" if exe.exists() else "missing"
-    if stt_model and wav:
-        from . import config
-        from .stt import Whisper
+        for name in ("whisper-server", "parakeet-server"):
+            res["whisper"][f"{backend}/{name}"] = "present" if (paths.WHISPER / backend / f"{name}.exe").exists() else "missing"
+    if stt_model and wav:  # e.g. "tiny.en,parakeet-tdt-0.6b-v3-q8_0": each model hears the WAV on the CPU
+        import wave
+
+        from . import config, stt
         config.load()
-        config._cache.update(model=stt_model, backend="cpu")
-        w = Whisper()
-        t0 = time.time()
-        if w.start():
-            import wave
-            with wave.open(wav) as f:
-                pcm = f.readframes(f.getnframes())
-            res["whisper"]["heard"] = w.transcribe(pcm)
-            res["whisper"]["seconds"] = round(time.time() - t0, 1)
-            w.stop()
-        else:
-            res["whisper"]["error"] = w.error or "did not start"
+        with wave.open(wav) as f:
+            pcm = f.readframes(f.getnframes())
+        res["speech"] = {}
+        for model in stt_model.split(","):
+            config._cache.update(model=model, backend="cpu")
+            engine_ = stt.make()
+            t0 = time.time()
+            if engine_.start():
+                t1 = time.time()
+                res["speech"][model] = {"heard": engine_.transcribe(pcm), "start_s": round(t1 - t0, 2),
+                                        "transcribe_s": round(time.time() - t1, 2), "engine": type(engine_).__name__}
+                engine_.stop()
+            else:
+                res["speech"][model] = {"heard": "", "error": engine_.error or "did not start"}
     with open(out, "w", encoding="utf-8") as f:
         json.dump(res, f, indent=2)
     ok = all(v == "ok" for v in res["imports"].values()) and not bad and str(res["tray"]).startswith("ok")

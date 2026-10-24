@@ -46,7 +46,7 @@ jobs:
         uses: actions/cache@v4
         with:
           path: whisper-bin
-          key: whisper-${{ env.WHISPER_SRC }}-${{ env.WHISPER_BIN_RELEASE }}-v1
+          key: whisper-${{ env.WHISPER_SRC }}-${{ env.WHISPER_BIN_RELEASE }}-${{ hashFiles('native/**') }}-v2
 
       - name: Install the Vulkan SDK
         if: steps.wcache.outputs.cache-hit != 'true'
@@ -58,17 +58,30 @@ jobs:
           "VULKAN_SDK=$sdk" >> $env:GITHUB_ENV
           "$sdk\Bin" >> $env:GITHUB_PATH
 
-      - name: Build whisper-server for the GPU (Vulkan)
+      - name: Build whisper-server and parakeet-server for the GPU (Vulkan)
         if: steps.wcache.outputs.cache-hit != 'true'
         shell: pwsh
         run: |
           git clone --depth 1 --branch $env:WHISPER_SRC https://github.com/ggml-org/whisper.cpp wsrc
+          # our parakeet-server (native/) builds inside whisper.cpp's tree, next to its parakeet-cli
+          Copy-Item -Recurse native\parakeet-server wsrc\examples\parakeet-server
+          (Get-Content wsrc\examples\CMakeLists.txt) -replace '^(\s*)add_subdirectory\(parakeet-cli\)', "`$0`n`$1add_subdirectory(parakeet-server)" | Set-Content wsrc\examples\CMakeLists.txt
+          Select-String -Path wsrc\examples\CMakeLists.txt -Pattern parakeet
           cmake -S wsrc -B wbuild -DGGML_VULKAN=ON -DBUILD_SHARED_LIBS=OFF -DGGML_NATIVE=OFF -DWHISPER_BUILD_TESTS=OFF -DWHISPER_SDL2=OFF
-          cmake --build wbuild --config Release --target whisper-server --parallel 4
+          cmake --build wbuild --config Release --target whisper-server parakeet-server --parallel 4
           New-Item -ItemType Directory -Force whisper-bin\vulkan | Out-Null
-          Copy-Item wbuild\bin\Release\whisper-server.exe whisper-bin\vulkan\
+          Copy-Item wbuild\bin\Release\whisper-server.exe, wbuild\bin\Release\parakeet-server.exe whisper-bin\vulkan\
           Get-ChildItem wbuild\bin\Release -Filter *.dll | Copy-Item -Destination whisper-bin\vulkan\
           Copy-Item wsrc\LICENSE whisper-bin\LICENSE-whisper.cpp.txt
+
+      - name: Build parakeet-server for the CPU (fallback without a GPU)
+        if: steps.wcache.outputs.cache-hit != 'true'
+        shell: pwsh
+        run: |
+          cmake -S wsrc -B wbuild-cpu -DGGML_VULKAN=OFF -DBUILD_SHARED_LIBS=OFF -DGGML_NATIVE=OFF -DWHISPER_BUILD_TESTS=OFF -DWHISPER_SDL2=OFF
+          cmake --build wbuild-cpu --config Release --target parakeet-server --parallel 4
+          New-Item -ItemType Directory -Force whisper-bin\cpu | Out-Null
+          Copy-Item wbuild-cpu\bin\Release\parakeet-server.exe whisper-bin\cpu\
 
       - name: Get the official CPU build (fallback without a GPU)
         if: steps.wcache.outputs.cache-hit != 'true'
@@ -91,18 +104,29 @@ jobs:
           Copy-Item -Recurse whisper-bin dist\WindowsVoiceAgent\whisper
           Get-ChildItem -Recurse dist\WindowsVoiceAgent\whisper | Select-Object FullName, Length
 
-      - name: Self-test the built app (imports, every phrase, speech on the CPU)
+      - name: Cached test models
+        uses: actions/cache@v4
+        with:
+          path: test-models
+          key: test-models-tiny.en-parakeet-tdt-0.6b-v3-q8_0-v1
+
+      - name: Self-test the built app (imports, every phrase, tray, Whisper and Parakeet on the CPU)
         shell: pwsh
         run: |
+          New-Item -ItemType Directory -Force test-models | Out-Null
+          if (!(Test-Path test-models\ggml-tiny.en.bin)) { curl.exe -sSL -o test-models\ggml-tiny.en.bin https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-tiny.en.bin }
+          if (!(Test-Path test-models\ggml-parakeet-tdt-0.6b-v3-q8_0.bin)) { curl.exe -sSL -o test-models\ggml-parakeet-tdt-0.6b-v3-q8_0.bin https://huggingface.co/ggml-org/parakeet-GGUF/resolve/main/ggml-parakeet-tdt-0.6b-v3-q8_0.bin }
           $models = "$env:LOCALAPPDATA\WindowsVoiceAgent\models"
           New-Item -ItemType Directory -Force $models | Out-Null
-          curl.exe -sSL -o "$models\ggml-tiny.en.bin" https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-tiny.en.bin
+          Copy-Item test-models\* $models\
           $p = Start-Process -Wait -PassThru -FilePath dist\WindowsVoiceAgent\WindowsVoiceAgent.exe `
-            -ArgumentList "--selftest","$pwd\selftest.json","tiny.en","$pwd\tests\data\open_spotify.wav"
+            -ArgumentList "--selftest","$pwd\selftest.json","tiny.en,parakeet-tdt-0.6b-v3-q8_0","$pwd\tests\data\open_spotify.wav"
           Get-Content selftest.json
           $r = Get-Content selftest.json | ConvertFrom-Json
           if ($p.ExitCode -ne 0) { Get-Content "$env:LOCALAPPDATA\WindowsVoiceAgent\logs\*" -ErrorAction SilentlyContinue; throw "self-test failed" }
-          if ($r.whisper.heard -notmatch "spotify") { Get-Content "$env:LOCALAPPDATA\WindowsVoiceAgent\logs\whisper.log"; throw "speech test heard: '$($r.whisper.heard)'" }
+          foreach ($m in $r.speech.PSObject.Properties) {
+            if ($m.Value.heard -notmatch "spotify") { Get-Content "$env:LOCALAPPDATA\WindowsVoiceAgent\logs\*" -ErrorAction SilentlyContinue; throw "$($m.Name) heard: '$($m.Value.heard)' $($m.Value.error)" }
+          }
 
       - name: Installer
         shell: pwsh

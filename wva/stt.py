@@ -8,6 +8,7 @@ import os
 import re
 import socket
 import subprocess
+import sys
 import threading
 import time
 import urllib.error
@@ -17,8 +18,16 @@ import wave
 
 from . import config, paths
 
+WINDOWS = sys.platform == "win32"
+
 log = logging.getLogger("wva.stt")
-MODEL_URL = "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-{}.bin"
+WHISPER_URL = "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-{}.bin"
+PARAKEET_URL = "https://huggingface.co/ggml-org/parakeet-GGUF/resolve/main/ggml-{}.bin"
+PARAKEET = "parakeet-tdt-0.6b-v3-q8_0"
+
+
+def model_url(mid):
+    return (PARAKEET_URL if mid.startswith("parakeet") else WHISPER_URL).format(mid)
 # What the tray offers: id -> (label, MB to download, understands Hindi, about MB of memory
 # while loaded, how fast it is on a CPU). The memory is graphics memory (VRAM) on the GPU,
 # RAM on the CPU; on top of it whisper-server itself takes ~100 MB of RAM. Rough numbers:
@@ -27,6 +36,9 @@ MODELS = {
     "base.en-q5_1": ("Fast: least accurate", 60, False, 200, "quick"),
     "small.en-q5_1": ("Balanced: good on weaker GPUs", 190, False, 400, "ok"),
     "large-v3-turbo-q5_0": ("Best: most accurate, Hindi too", 550, True, 900, "slow"),
+    # NVIDIA's Parakeet (through whisper.cpp): a tenth of a second per command even on a CPU.
+    # English and 24 European languages, no Hindi; no prompt, so names lean on the ALIASES.
+    PARAKEET: ("Parakeet: fastest, English", 669, False, 700, "quick"),  # 671 MB RAM measured on a CPU
 }
 CLOUD = {  # OpenAI-style transcription APIs: id -> (label, endpoint, model)
     "groq": ("Cloud: Groq (needs an API key, sends your audio to Groq)",
@@ -59,8 +71,11 @@ def delete_unused():
 
 
 def make(on_progress=None):
-    """The speech engine the settings ask for: a cloud API, or whisper-server here."""
-    return Cloud(config.get("model"), on_progress) if config.get("model") in CLOUD else Whisper(on_progress)
+    """The speech engine the settings ask for: a cloud API, Parakeet, or whisper-server here."""
+    m = config.get("model")
+    if m in CLOUD:
+        return Cloud(m, on_progress)
+    return Parakeet(on_progress) if m.startswith("parakeet") else Whisper(on_progress)
 
 
 def _wav(pcm, rate=16000):
@@ -121,7 +136,7 @@ class Whisper:
         part = p.with_suffix(".part")
         for attempt in range(3):
             try:
-                req = urllib.request.Request(MODEL_URL.format(self.model), headers={"User-Agent": "WindowsVoiceAgent"})
+                req = urllib.request.Request(model_url(self.model), headers={"User-Agent": "WindowsVoiceAgent"})
                 with urllib.request.urlopen(req, timeout=30) as r, open(part, "wb") as f:
                     total = int(r.headers.get("Content-Length") or 0)
                     got, last = 0, -1
@@ -153,6 +168,7 @@ class Whisper:
         return paths.WHISPER / backend / "whisper-server.exe"
 
     def start(self):
+        paths.ensure()
         if not self.ensure_model():
             return False
         want = config.get("backend")
@@ -242,6 +258,87 @@ class Whisper:
                 threading.Thread(target=self.start, daemon=True).start()
             return ""
         return _tidy(text)
+
+
+class Parakeet(Whisper):
+    """NVIDIA's Parakeet through our parakeet-server (native/parakeet-server): the model
+    stays loaded and audio goes over a pipe, no HTTP. Same GPU (Vulkan) / CPU fallback."""
+    EXE = "parakeet-server"
+    LOG = "parakeet.log"
+
+    def _exe(self, backend):
+        d = paths.WHISPER / backend
+        return d / f"{self.EXE}.exe" if (d / f"{self.EXE}.exe").exists() or WINDOWS else d / self.EXE
+
+    def _launch(self, backend):
+        import queue
+        threads = str(max(2, min(8, (os.cpu_count() or 4) // 2)))
+        argv = [str(self._exe(backend)), "-m", str(self.model_path), "-t", threads, "-v"]
+        if backend == "cpu":
+            argv.append("-ng")
+        self._log = open(paths.LOGS / self.LOG, "w", encoding="utf-8", errors="replace")
+        log.info("starting %s", argv)
+        self.proc = subprocess.Popen(argv, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=self._log,
+                                     cwd=str(self._exe(backend).parent), creationflags=0x08000000 if WINDOWS else 0)
+        if WINDOWS:
+            from . import win
+            self._job = win.kill_with_me(self.proc)
+        self._lines = queue.Queue()
+        self._lock = threading.Lock()
+
+        def read(out, q):
+            for line in out:
+                q.put(line.decode("utf-8", "replace").rstrip("\r\n"))
+            q.put(None)  # it exited
+        threading.Thread(target=read, args=(self.proc.stdout, self._lines), daemon=True).start()
+        try:
+            first = self._lines.get(timeout=180)
+        except queue.Empty:
+            first = None
+        if not first or not first.startswith("READY"):
+            log.warning("parakeet-server (%s) didn't start: %r, exit %s", backend, first, self.proc.poll())
+            self.stop()
+            return False
+        self._read_device()
+        return True
+
+    def _read_device(self):
+        try:
+            text = (paths.LOGS / self.LOG).read_text(encoding="utf-8", errors="replace")
+        except OSError:
+            return
+        m = re.search(r"ggml_vulkan: \d+ = (.+?) \(", text)
+        self.device = m.group(1).strip() if m else ""
+
+    def transcribe(self, pcm, language=None):
+        import queue
+        import struct
+        if not self.ready or not self.proc or self.proc.poll() is not None:
+            if self.proc and self.proc.poll() is not None and self.ready:  # it died: bring it back once
+                self.ready = False
+                threading.Thread(target=self.start, daemon=True).start()
+            return ""
+        with self._lock:
+            try:
+                self.proc.stdin.write(struct.pack("<I", len(pcm) // 2) + pcm)
+                self.proc.stdin.flush()
+                line = self._lines.get(timeout=30)
+            except (OSError, queue.Empty) as e:
+                log.warning("parakeet transcribe failed: %s", e)
+                return ""
+        if line is None:
+            return ""
+        _, _, text = line.partition("\t")
+        return _tidy(text)
+
+    def stop(self):
+        if self.proc and self.proc.poll() is None:
+            try:
+                self.proc.stdin.close()  # lets it exit by itself
+                self.proc.wait(2)
+            except Exception:
+                self.proc.kill()
+        self.ready = False
 
 
 class Cloud:
