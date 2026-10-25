@@ -170,13 +170,60 @@ def _collapse(text):
     return text
 
 
-def _tidy(text):
+def _norm(text):
+    return " ".join(re.findall(r"[a-z0-9']+", text.lower()))
+
+
+def _tidy(text, prompt=None):
     text = _collapse(re.sub(r"\s+", " ", text or "").strip())
-    if PROMPT.lower() in text.lower():  # whisper sometimes repeats its prompt on silence
+    t, p = _norm(text), _norm(prompt or PROMPT)
+    if t and (p in t or (len(t.split()) >= 8 and t in p)):  # whisper sometimes "hears" its prompt in silence
         return ""
     return "" if JUNK.match(text) else text
+
+
 # Names the recogniser should expect; whisper spells them right when it has seen them.
 PROMPT = "Computer, open Spotify. Discord, Stremio, YouTube, Instagram, Steam, Chrome. Next tab, volume up."
+PROMPT_CHARS = 600  # Whisper reads at most ~220 tokens of prompt; this stays well inside
+_prompt = {"t": 0.0, "text": ""}
+
+
+def build_prompt(call_words=(), games=(), fixes=(), used=()):
+    """This PC's prompt: what Whisper should expect, most useful first. The call words (so
+    "Angel" isn't "angle"), your own word fixes (what you meant), your most used commands,
+    your games' real names, then the usual names. Cut to PROMPT_CHARS at a whole item."""
+    items = [f"{w.title()}, open Spotify" for w in call_words[:2]]
+    items += list(dict.fromkeys(f for f in fixes if f))[:12]
+    items += list(dict.fromkeys(u[:1].upper() + u[1:] for u in used if u))[:6]
+    items += [g for g in games][:10]
+    items += [PROMPT.rstrip(".")]
+    out = ""
+    for it in dict.fromkeys(i.strip().rstrip(".") for i in items if i.strip()):
+        if len(out) + len(it) + 2 > PROMPT_CHARS:
+            break
+        out += it + ". "
+    return out.strip()
+
+
+def prompt():
+    """The prompt for this PC, rebuilt every 10 minutes (new games, new fixes, new habits)."""
+    if time.time() - _prompt["t"] < 600 and _prompt["text"]:
+        return _prompt["text"]
+    try:
+        from collections import Counter
+
+        from . import apps, history, listen, tuning
+        rows = history.rows(30)
+        used = [t for t, _ in Counter(e.get("clean", "").rstrip(".?!") for e in rows
+                                      if e.get("result") == "ran" and 0 < len(e.get("clean", "")) <= 40).most_common(6)]
+        fixes = [right for kind, _, right in tuning.parse("\n".join(tuning._load_lines())) if kind == "heard"]
+        text = build_prompt(listen.call_words(config.get("call_word")), [g["name"] for g in apps.games()], fixes, used)
+    except Exception as e:
+        log.warning("couldn't build the prompt: %s", e)
+        text = PROMPT
+    _prompt.update(t=time.time(), text=text)
+    log.info("whisper prompt: %r", text)
+    return text
 # What whisper "hears" in silence or noise.
 JUNK = re.compile(r"^\W*(?:\[[^\]]*\]|\([^)]*\)|thank you\.?|thanks for watching!?|you|bye\.?|\.+|"
                   r"subtitles by.*|please subscribe.*)\W*$", re.I)
@@ -261,6 +308,8 @@ class Whisper:
             if self._launch(backend):
                 # the Vulkan build without a usable GPU quietly runs on the CPU
                 self.backend = backend if backend != "vulkan" or self.device else "cpu"
+                if self.backend == "cpu":
+                    self.device = ""  # the GPU it listed isn't the one doing the work
                 self.ready, self.progress = True, ""
                 self._warm_up()
                 self.on_progress("")
@@ -343,15 +392,21 @@ class Whisper:
         self.ready = False
 
     # ------------------------------------------------------------- transcribe
-    def transcribe(self, pcm, language=None):
-        """16-bit mono 16 kHz PCM -> text ('' when nothing was said)."""
+    can_retry = True  # Whisper can listen again more carefully (beam search, the whole 30 s window)
+
+    def transcribe(self, pcm, language=None, best=False):
+        """16-bit mono 16 kHz PCM -> text ('' when nothing was said). best: the second try
+        after a phrase matched nothing: beam search over the full window (slower, more careful)."""
         if not self.ready:
             return ""
+        p = prompt()
         fields = {"temperature": "0.0", "temperature_inc": "0.2", "response_format": "json",
-                  "language": language or config.get("language") or "en", "prompt": PROMPT}
-        ctx = audio_ctx(len(pcm) / 32000)
+                  "language": language or config.get("language") or "en", "prompt": p}
+        ctx = 0 if best else audio_ctx(len(pcm) / 32000)
         if ctx:
             fields["audio_ctx"] = str(ctx)
+        if best:
+            fields.update(beam_size="5", best_of="5")
         body, ctype = _multipart(fields, _wav(pcm))
         req = urllib.request.Request(f"http://127.0.0.1:{self.port}/inference", body, {"Content-Type": ctype})
         try:
@@ -362,7 +417,7 @@ class Whisper:
             if self.proc and self.proc.poll() is not None:  # the server died: bring it back once
                 threading.Thread(target=self.start, daemon=True).start()
             return ""
-        return _tidy(text)
+        return _tidy(text, p)
 
 
 class Parakeet(Whisper):
@@ -370,6 +425,7 @@ class Parakeet(Whisper):
     stays loaded and audio goes over a pipe, no HTTP. Same GPU (Vulkan) / CPU fallback."""
     EXE = "parakeet-server"
     LOG = "parakeet.log"
+    can_retry = False  # greedy only: there's no more careful way to ask it
 
     def _exe(self, backend):
         d = paths.WHISPER / backend
@@ -408,7 +464,7 @@ class Parakeet(Whisper):
         self._read_device(self.logname)
         return True
 
-    def transcribe(self, pcm, language=None):
+    def transcribe(self, pcm, language=None, best=False):
         import queue
         import struct
         if not self.ready or not self.proc or self.proc.poll() is not None:
@@ -462,10 +518,12 @@ class Cloud:
         self.ready, self.error = True, ""
         return True
 
+    can_retry = False
+
     def stop(self):
         self.ready = False
 
-    def transcribe(self, pcm, language=None):
+    def transcribe(self, pcm, language=None, best=False):
         if not self.ready:
             return ""
         _, url, model = CLOUD[self.provider]

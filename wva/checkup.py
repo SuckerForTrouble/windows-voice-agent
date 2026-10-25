@@ -101,8 +101,41 @@ def c_speed():
               "apps. Still slow? Send the logs folder (tray → Help → Open data folder): it lists the GPUs and timings."
     return WARN, detail, fix
 
+NOISY, QUIET, CLIPPED = 600, 900, 0.002  # room noise / voice level (RMS of 0-32767), share of clipped samples
+BROADCAST = "The free NVIDIA Broadcast app (RTX cards) removes background noise: install it, then tray → " \
+            "Microphone → 'Microphone (NVIDIA Broadcast)'."
+
+
+def mic_verdict(name, room, voices, rtx=False):
+    """(status, detail, fix) from 3 s of the room ({"noise", "voice", "clipped"}, recorder.stats)
+    and your last commands' recordings. Laptop array mics (fans, keyboard) are the usual trouble."""
+    array_mic = "array" in name.lower()
+    voice = sorted(v["voice"] for v in voices)[len(voices) // 2] if voices else 0
+    clipped = max((v["clipped"] for v in voices), default=0.0)
+    noise = max(room["noise"], min((v["noise"] for v in voices), default=0))
+    parts = [f"room noise {noise}" + (f", your voice {voice} (last {len(voices)} commands)" if voices else "")]
+    fixes, st = [], OK
+    if clipped > CLIPPED:
+        st = WARN
+        parts.append("your voice is so loud it distorts")
+        fixes.append("Settings → System → Sound → your mic → Input volume: lower it to about 70.")
+    elif voices and voice < QUIET:
+        st = WARN
+        parts.append("your voice comes through quiet")
+        fixes.append("Speak closer to the mic, or Settings → System → Sound → your mic → Input volume: raise it.")
+    if noise > NOISY or (voices and voice < noise * 4):
+        st = WARN
+        parts.append("there's a lot of background noise" + (" (laptop mics hear the fans and keyboard)" if array_mic else ""))
+        fixes.append(BROADCAST if rtx else "A headset mic hears you far better than the laptop's.")
+    elif array_mic and rtx:
+        fixes.append("Tip: " + BROADCAST)
+    return st, f"{name}: " + ", ".join(parts), " ".join(fixes)
+
+
 def c_mic():
     import sounddevice as sd
+
+    from .recorder import stats
     name = config.get("mic")
     dev = None
     if name:
@@ -114,15 +147,14 @@ def c_mic():
     frames = []
     with sd.RawInputStream(samplerate=16000, channels=1, dtype="int16", device=dev,
                            callback=lambda data, n, t, st: frames.append(bytes(data))):
-        time.sleep(0.6)
-    import array
-    a = array.array("h", b"".join(frames))
-    peak = max((abs(v) for v in a), default=0)
-    if not a or peak == 0:
+        time.sleep(3.0)
+    pcm = b"".join(frames)
+    if not pcm or not any(pcm):
         return FAIL, f"{info['name']}: only silence came through.", \
             "Settings → Privacy & security → Microphone: turn on 'Microphone access' and 'Let desktop apps access your microphone'. " \
             "Also check the mic isn't muted (a button on the headset?)."
-    return OK, f"{info['name']} (level {peak})", ""
+    rtx = any("rtx" in n.lower() for _, n, _ in getattr(state.stt, "devices", []) or [])
+    return mic_verdict(info["name"], stats(pcm), state.mic_stats, rtx)
 
 
 def c_hotkeys():

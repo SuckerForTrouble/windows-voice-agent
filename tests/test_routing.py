@@ -245,6 +245,37 @@ def test_call_word():
     assert call_words(" Angel ,jarvis, angel,") == ["angel", "jarvis"] and call_words("") == ["angel"]
 
 
+def test_hearing_better():
+    """Level 1: the mic check's verdicts, this PC's Whisper prompt, and the prompt-echo filter."""
+    import wave
+
+    from wva import stt
+    from wva.checkup import OK, WARN, mic_verdict
+    from wva.recorder import stats
+    with wave.open(os.path.join(os.path.dirname(__file__), "data", "open_spotify.wav")) as w:
+        speech = w.readframes(w.getnframes())
+    st = stats(_room(1.0) + speech + _room(1.0, seed=2))
+    assert st["noise"] < 300 and st["voice"] > 1500 and st["clipped"] == 0, st
+    quiet = stats(_room(2.0, amp=60))
+    good = [stats(speech)] * 3
+    assert mic_verdict("Headset Microphone", quiet, good)[0] == OK
+    noisy = mic_verdict("Microphone Array (AMD Audio Dev)", stats(_room(2.0, amp=1500)), good, rtx=True)
+    assert noisy[0] == WARN and "NVIDIA Broadcast" in noisy[2] and "fans" in noisy[1], noisy
+    loud = [{"noise": 100, "voice": 20000, "clipped": 0.01}]
+    assert "distorts" in mic_verdict("Mic", quiet, loud)[1]
+    assert "quiet" in mic_verdict("Mic", quiet, [{"noise": 50, "voice": 400, "clipped": 0.0}])[1]
+    assert "Broadcast" in mic_verdict("Microphone Array (Realtek)", quiet, good, rtx=True)[2]  # a tip, still OK
+
+    p = stt.build_prompt(["angel", "jarvis"], ["Counter-Strike", "Deadlock", "Tom Clancy's Rainbow Six Siege"],
+                         ["stremio", "valorant"], ["open spotify", "volume up"])
+    assert p.startswith("Angel, open Spotify. Jarvis, open Spotify.") and "Rainbow Six Siege" in p and "Valorant" not in p
+    assert "stremio" in p and "Open spotify" in p and len(p) <= stt.PROMPT_CHARS
+    long = stt.build_prompt(["angel"], [f"Game number {i} with a long name" for i in range(60)])
+    assert len(long) <= stt.PROMPT_CHARS and long.endswith(".")
+    assert stt._tidy(p, p) == "" and stt._tidy(p + " " + p, p) == ""  # whisper repeating its prompt on silence
+    assert stt._tidy("Open Spotify.", p) == "Open Spotify." and stt._tidy("Deadlock", p) == "Deadlock"
+
+
 def test_whisper_tidy():
     """What the trimmed window made Best write (2026-10-25), and what must stay as it is."""
     from wva import config, stt

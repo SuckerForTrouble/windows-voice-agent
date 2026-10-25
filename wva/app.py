@@ -21,12 +21,15 @@ from . import (APP_ID, APP_NAME, __version__, actions, apps, config, engine, his
 from . import rules  # noqa: F401  (registers the commands)
 from . import stt as speech
 from .recorder import Recorder
+from .recorder import stats as rec_stats
 
 log = logging.getLogger("wva")
 TAP = 0.35            # a press shorter than this is a tap: toggle mode
 MIN_SECONDS = 0.35    # shorter recordings are ignored
 MIN_PEAK = 600        # quieter than this (of 32767) is silence
 GAME_IDLE = 120       # in a game, the model steps out again this long after the last command
+TAIL = 0.3            # still recorded after the key is let go: people let go on the last word
+BEEP_SKIP = 0.15      # dropped from the start of a recording: the start beep (70 ms, plus the delay)
 RUN_KEY = r"Software\Microsoft\Windows\CurrentVersion\Run"
 
 
@@ -57,6 +60,7 @@ class App:
         state.stt = self.stt
         self.mode = None        # "agent" / "dictate" while listening
         self.toggled = False    # listening after a tap, until the next tap
+        self.finishing = False  # the key was let go; the last 0.3 s is still being recorded
         self.jobs = queue.Queue()
         self.busy = False       # a recording is being turned into a command
         self.hotkeys = None
@@ -273,7 +277,7 @@ class App:
             return
         self.mode, self.toggled = name, False
         try:
-            self.rec.start(config.get("mic"))
+            self.rec.start(config.get("mic"), skip=BEEP_SKIP if config.get("sounds") else 0.0)
         except Exception as e:
             self.mode = None
             osd.show(f"Microphone problem: {e}", "error", 6)
@@ -313,9 +317,27 @@ class App:
             osd.show("Cancelled", "info", 1.5)
 
     def _finish(self):
+        """The key was let go: keep recording TAIL seconds more (the end of the last word), then
+        stop and queue it. Off the hotkey thread, which must not wait."""
+        if self.finishing:
+            return
+        self.finishing = True
+        released = time.time()
+
+        def later():
+            time.sleep(TAIL)
+            try:
+                self._finish_now(released)
+            finally:
+                self.finishing = False
+        threading.Thread(target=later, daemon=True).start()
+
+    def _finish_now(self, released):
+        if not self.rec.active:  # cancelled (Esc) during the tail
+            return
         mode = self.mode
         pcm, secs, peak = self.rec.stop()
-        released = time.time()
+        state.mic_stats = (state.mic_stats + [rec_stats(pcm)])[-10:]
         self.hotkeys.unregister("cancel")
         self.mode, self.toggled = None, False
         beep("stop")
@@ -384,7 +406,9 @@ class App:
                     osd.hide()
                     win.type_unicode(text + " ")
                 else:
-                    self.run_text(text, woke=mode == "agent", took=time.time() - released)
+                    lang = self._language(mode)
+                    retry = (lambda: self.stt.transcribe(pcm, language=lang, best=True)) if self.stt.can_retry else None
+                    self.run_text(text, woke=mode == "agent", took=time.time() - released, retry=retry)
                 total = time.time() - released
                 state.timings = (state.timings + [{"stt": round(heard_in, 2), "total": round(total, 2),
                                                    "audio": round(secs, 1), "idle": round(idle), "model_ms": model_ms}])[-20:]
@@ -442,7 +466,9 @@ class App:
             return
         self.follow[via] = 0.0
         log.info("call word (%s), then: %r", via, rest)
-        self.run_text(rest, woke=True, took=time.time() - heard_at, via=via)
+        retry = (lambda: listen.strip_call(self.stt.transcribe(pcm, language=self._language("agent"), best=True), word)) \
+            if self.stt.can_retry and rest else None
+        self.run_text(rest, woke=True, took=time.time() - heard_at, via=via, retry=retry)
 
     def toggle_panel(self):
         from . import panel
@@ -547,11 +573,24 @@ class App:
             self.listener = None
             self._sync_listener()
 
-    def run_text(self, text, woke=True, took=None, via=None):
-        """via="discord": heard in Discord's sound, and the pill says so."""
+    def run_text(self, text, woke=True, took=None, via=None, retry=None):
+        """via="discord": heard in Discord's sound, and the pill says so. retry: when the
+        words match nothing, a more careful second listen to the same audio (Whisper only)."""
         engine.CTX.raw, engine.CTX.last_target = text, None
+        asked = woke
         steps, woke = engine.plan(text, woke=woke)
         steps = actions.streamline(steps)
+        if not steps and retry:  # costs time only when it would have failed anyway
+            t0 = time.time()
+            again = retry() or ""
+            log.info("second try (%.2fs): %r -> %r", time.time() - t0, text, again)
+            if again and again.strip().lower() != text.strip().lower():
+                engine.CTX.raw = again
+                steps2, woke2 = engine.plan(again, woke=asked)
+                if steps2:
+                    text, steps, woke = again, actions.streamline(steps2), woke2
+                else:
+                    engine.CTX.raw = text
         heard = re.sub(r"\s+", " ", text).strip()
         source, via = ("Discord", "discord") if via == "discord" else (None, "agent")
         if not steps:
