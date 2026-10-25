@@ -93,6 +93,8 @@ APPS = {
     "directx diagnostic": ["exe:dxdiag.exe"], "dxdiag": ["exe:dxdiag.exe"], "disk cleanup": ["exe:cleanmgr.exe"],
     "windows security": ["uri:windowsdefender:"], "virus scan": ["uri:windowsdefender:"], "defender": ["uri:windowsdefender:"],
     "nvidia control panel": ["app:NVIDIA Control Panel"], "sticky notes": ["app:Sticky Notes"],
+    "phone": ["app:Phone Link", "cmd:explorer.exe shell:AppsFolder\\Microsoft.YourPhone_8wekyb3d8bbwe!App"],
+    "phone link": ["app:Phone Link", "cmd:explorer.exe shell:AppsFolder\\Microsoft.YourPhone_8wekyb3d8bbwe!App"],
 }
 
 SITES = {
@@ -142,6 +144,7 @@ APP_PROCS = {
     "gta": ["gta5.exe", "gta5_enhanced.exe", "playgtav.exe"], "counter strike": ["cs2.exe"],
     "calculator": ["calculatorapp.exe"], "settings": ["systemsettings.exe"], "paint": ["mspaint.exe"],
     "nvidia app": ["nvidia app.exe"], "terminal": ["windowsterminal.exe"], "photos": ["photos.exe"],
+    "phone link": ["phoneexperiencehost.exe", "yourphone.exe"],
 }
 SPOKEN = {
     "google chrome": "chrome", "microsoft edge": "edge", "mozilla firefox": "firefox", "opera gx": "opera",
@@ -153,6 +156,7 @@ SPOKEN = {
     "gta v": "gta", "gta five": "gta", "obs studio": "obs", "msi afterburner": "afterburner", "whatsapp desktop": "whatsapp",
     "spotify app": "spotify", "discord app": "discord", "steam app": "steam", "explorer": "file explorer",
     "files": "file explorer", "file manager": "file explorer", "windows terminal": "terminal", "the game": "game",
+    "your phone": "phone link", "phone": "phone link", "phonelink": "phone link",
 }
 BROWSERS = ("chrome", "edge", "firefox", "brave", "opera", "zen", "vivaldi")
 # Never closed or killed, whatever the name sounds like.

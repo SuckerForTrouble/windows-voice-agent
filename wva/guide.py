@@ -17,6 +17,7 @@ GROUP_INFO = {
     "Close & switch apps": ("🪟", "Close apps, even the ones hiding behind your game."),
     "Spotify": ("🎵", "Control Spotify from anywhere."),
     "Discord": ("💬", "Mute, deafen, answer calls."),
+    "Phone": ("📞", "Phone Link: answer or hang up phone calls, call, text."),
     "Stremio & watching": ("🎬", "Say a movie or show, it opens."),
     "Reels & Shorts": ("📱", "Scroll reels without touching anything."),
     "YouTube": ("▶️", "When a YouTube video is open."),

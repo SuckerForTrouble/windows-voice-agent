@@ -8,11 +8,12 @@ from . import audio as au
 from . import choices as ch
 from . import extras as x
 from . import files as fl
+from . import phone as ph
 from . import system as s
 from . import engine
 from .engine import num, parse_duration, rule
 
-FO, SD = "Files & folders", "Sound devices"
+FO, SD, PH = "Files & folders", "Sound devices", "Phone"
 R, YT, DC, SP, ST, G, C = ("Reels & Shorts", "YouTube", "Discord", "Spotify", "Stremio & watching", "Gaming",
                           "Close & switch apps")
 H, B, K, W, S, AU, SY, I, T, A = ("Voice agent", "Browser", "Keyboard", "Windows", "Sound & media", "App volume",
@@ -95,6 +96,16 @@ rule(DC, "mute me on Discord", "Your Discord mic on/off (Ctrl+Shift+M)",
 rule(DC, "deafen | undeafen", "Discord deafen (Ctrl+Shift+D)",
      [r"(?:deafen|undeafen)(?: me| myself)?(?: (?:on|in) discord)?", r"discord (?:deafen|undeafen)", r"(?:deafen|undeafen) discord"],
      x.discord_deafen)
+# a phone call ringing on Phone Link takes "answer the call" before Discord does
+PICK = r"(answer|accept|pick up|take|get|decline|reject|ignore|cut|dismiss)"
+rule(PH, "answer | decline the phone call", "Phone Link's Accept / Decline: the call's sound comes through the PC",
+     [PICK + r" (?:the |my |this )?(?:phone|mobile|cell)(?: call)?", PICK + r" (?:the |this )?call on (?:my |the )?(?:phone|mobile)",
+      PICK + r" (?:the |this )?(?:phone link|incoming) call"],
+     lambda d: ph.answer() if d in ("answer", "accept", "pick up", "take", "get") else ph.decline(), wake=True)
+rule(PH, "answer | decline the call (phone ringing)", "While a phone call rings, 'answer the call' is that one (else Discord's)",
+     [PICK + r" (?:the |this |that )?call", r"(pick up|answer)(?: it| that)?"],
+     lambda d: ph.answer() if d in ("answer", "accept", "pick up", "take", "get") else ph.decline(),
+     wake=True, guard=lambda d: ph.ringing())
 rule(DC, "answer the Discord call", "Ctrl+Enter in Discord",
      [r"(?:answer|accept|pick up|join) (?:the )?(?:discord )?call(?: on discord)?", r"(?:answer|pick up|accept) discord"],
      x.discord_answer)
@@ -104,6 +115,40 @@ rule(DC, "go to <server | channel | friend> on Discord", "Discord's quick switch
      [r"(?:go to|open|switch to|jump to|show(?: me)?|find) (.+?) (?:on|in) discord",
       r"discord (?:go to|open|switch to|jump to|find) (.+)", r"(?:message|dm|text) (.+?) on discord"],
      x.discord_goto, wake=True, free=True)
+
+# Phone (Phone Link) ------------------------------------------------------------------
+rule(PH, "hang up", "Ends the phone call (Phone Link: Ctrl+Shift+H)",
+     [r"hang up(?: the (?:phone|call))?(?: on (?:him|her|them))?", r"(?:end|cut|stop|drop|finish|disconnect) (?:the |this |my )?(?:phone )?call",
+      r"put the phone down"], ph.hang_up, wake=True)
+rule(PH, "mute | unmute the phone call", "Your side of the call (Phone Link: Ctrl+Shift+M)",
+     [r"(?:mute|unmute) (?:the |this |my )?(?:phone )?call", r"(?:mute|unmute) (?:me |myself )?on the (?:phone|call)"],
+     ph.mute_call)
+rule(PH, "move the call to my phone", "The call's sound back on the phone instead of the PC",
+     [r"(?:move|send|transfer|switch|put) (?:the |this )?call (?:back )?(?:to|on) (?:my |the )?phone",
+      r"(?:take|continue) (?:the |this )?call on (?:my |the )?phone"], ph.to_phone, wake=True)
+rule(PH, "call <number | name>", "A number is dialled through Phone Link; a name goes into Phone Link's contact search, "
+     "and you press call (it never reads your contacts)",
+     [r"(?:call|dial|ring up|make a call to|phone call) (.+?)(?: (?:on|from|with) (?:my |the )?(?:phone|mobile|phone link|pc|computer))?"],
+     ph.call, wake=True, free=True,
+     guard=lambda who: not re.match(r"(?:of|it|that|this|me|him|her|them|the shots|a cab|an uber|off)\b|\S+ (?:on|in) discord$", who))
+rule(PH, "text <name | number>", "A new message in Phone Link with the name or number filled in; you write and send it",
+     [r"(?:text|sms|message|send (?:a )?(?:text|message|sms) to|write to) (.+?)(?: (?:on|from) (?:my |the )?(?:phone|mobile|phone link))?"],
+     ph.message, wake=True, free=True,
+     guard=lambda who: not re.match(r"(?:it|that|this|me)\b", who) and not re.search(r" (?:on|in) (?:discord|whatsapp|telegram|instagram)$", who))
+rule(PH, "phone messages | calls | photos | notifications", "Opens Phone Link at that page",
+     [r"(?:open |show |go to |check )?(?:my |the )?phone(?: link)?(?:'s)? (messages|texts|calls|call history|photos|apps|notifications)",
+      r"(?:open |show |check )?(?:my |the )?(messages|texts|calls|photos|notifications) (?:on|from) (?:my |the )?phone(?: link)?"],
+     lambda tab: ph.open_phone({"texts": "messages", "call history": "calls", "notifications": None}.get(tab, tab)))
+rule(PH, "phone screen", "Your phone's screen in a window (Phone Link: Ctrl+P, some Android phones)",
+     [r"(?:open |show |mirror )?(?:my |the )?phone(?:'s)? screen", r"mirror (?:my |the )?phone"],
+     lambda: ph.phone_keys("ctrl+p", "the phone screen"))
+rule(PH, "phone do not disturb", "Turns Do Not Disturb on the phone on or off (Phone Link: Ctrl+Shift+D, Android)",
+     [r"(?:turn (?:on|off) |toggle |switch )?(?:do not disturb|dnd) on (?:my |the )?phone",
+      r"(?:my |the )?phone (?:do not disturb|dnd)(?: on| off)?", r"(?:put |set )?(?:my |the )?phone (?:on|to) do not disturb"],
+     lambda: ph.phone_keys("ctrl+shift+d", "Do Not Disturb"))
+rule(PH, "clear my phone notifications", "Phone Link: Ctrl+Alt+K",
+     [r"(?:clear|dismiss) (?:all )?(?:of )?(?:my |the )?phone(?:'s)? notifications", r"clear (?:all )?notifications on (?:my |the )?phone"],
+     lambda: ph.phone_keys("ctrl+alt+k", "clearing notifications"))
 
 # Spotify -----------------------------------------------------------------------------
 rule(SP, "play <song | artist> on Spotify", "Plays the top result (free accounts too), then back to what you were doing",

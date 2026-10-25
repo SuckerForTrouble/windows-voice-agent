@@ -270,6 +270,22 @@ def windows():
     return out
 
 
+def popups(keep):
+    """Every visible top-level window keep(w) accepts, small pop-ups and tool windows too
+    (a call window or a notification has no taskbar button), front to back."""
+    out = []
+
+    def cb(hwnd, _):
+        if user32.IsWindowVisible(hwnd):
+            w = Win(hwnd)
+            if keep(w):
+                out.append(w)
+        return True
+
+    user32.EnumWindows(WNDENUMPROC(cb), 0)
+    return out
+
+
 def foreground():
     h = user32.GetForegroundWindow()
     return Win(h) if h else None

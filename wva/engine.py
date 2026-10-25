@@ -118,7 +118,7 @@ VERB_FORMS = {base: base for base in (
     "open close increase decrease pause play mute unmute skip search switch turn lower raise minimize maximize "
     "launch start stop scroll type press show hide find take lock restart cancel connect disconnect move snap "
     "refresh reload zoom copy paste delete save select change enable disable toggle resume rewind call text "
-    "send set mute go").split()}
+    "send set mute go answer decline dial message").split()}
 for _b in list(VERB_FORMS):
     _stem = _b[:-1] if _b.endswith("e") else _b
     _dbl = _b + _b[-1] if re.fullmatch(r".*[^aeiou][aeiou][bdgmnpt]", _b) else _b  # stop -> stopped
