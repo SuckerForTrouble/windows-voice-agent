@@ -32,16 +32,26 @@ _thread = None
 level_source = None      # the app sets this: () -> 0..1, the mic level while listening
 
 
-def show(text, kind="info", seconds=3.0, title=None, chips=None, footer=None):
-    """kind: listen | busy | ok | error | info. seconds=0 keeps it up until the next call.
-    title, chips (one per command) and footer are used by the richer styles."""
+def _start():
     global _thread
-    if not config.get("osd"):
-        return
     if _thread is None:
         _thread = threading.Thread(target=_loop, daemon=True, name="osd")
         _thread.start()
+
+
+def show(text, kind="info", seconds=3.0, title=None, chips=None, footer=None):
+    """kind: listen | busy | ok | error | info. seconds=0 keeps it up until the next call.
+    title, chips (one per command) and footer are used by the richer styles."""
+    if not config.get("osd"):
+        return
+    _start()
     _q.put({"text": text, "kind": kind, "seconds": seconds, "title": title, "chips": chips or [], "footer": footer or ""})
+
+
+def ui(fn):
+    """Run fn(root) on this thread's Tk (the tray panel lives here too: one GUI thread for both)."""
+    _start()
+    _q.put(fn)
 
 
 def hide():
@@ -256,6 +266,13 @@ def _loop():
         try:
             while True:
                 item = _q.get_nowait()
+                if callable(item):  # ui(fn): the tray panel
+                    try:
+                        item(root)
+                    except Exception:
+                        import logging
+                        logging.getLogger("wva.ui").exception("ui call failed")
+                    continue
                 if state["hide"]:
                     root.after_cancel(state["hide"])
                     state["hide"] = None

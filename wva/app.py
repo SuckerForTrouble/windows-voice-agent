@@ -426,6 +426,10 @@ class App:
         log.info("call word, then: %r", rest)
         self.run_text(rest, woke=True, took=time.time() - heard_at)
 
+    def toggle_panel(self):
+        from . import panel
+        panel.toggle(self)
+
     def toggle_pause(self):
         """Tray → Pause for now: the keys stop being ours and the always-on mic closes, until unticked
         (a competitive game that wants F9, a meeting…). The model stays loaded, so resuming is instant."""

@@ -3,6 +3,7 @@ red listening, amber thinking), and its menu holds every setting, so nobody has
 to edit a file. The default is the light one: push-to-talk, the pill, beeps.
 Everything extra is off until you turn it on (tray, or Settings…)."""
 import os
+import sys
 
 import pystray
 
@@ -15,6 +16,35 @@ class Tray:
         self.app = app
         self.kind = "loading"
         self.icon = pystray.Icon("WindowsVoiceAgent", icon_image("loading"), APP_NAME, menu=self._menu())
+        self._hook_clicks()
+
+    SHOW_MENU = 0x8051  # WM_APP + 0x51: "show the classic menu now" (posted by the panel's More options…)
+
+    def _hook_clicks(self):
+        """A click on the icon (left or right) opens the tray panel instead of the classic menu,
+        which stays available through show_menu(). pystray keeps its Windows message handlers
+        in a dict per icon, so this swaps one entry; elsewhere (tests) nothing changes."""
+        handlers = getattr(self.icon, "_message_handlers", None)
+        if sys.platform != "win32" or not handlers:
+            return
+        key = next((k for k, v in handlers.items() if getattr(v, "__name__", "") == "_on_notify"), None)
+        if key is None:
+            return
+        classic = handlers[key]
+
+        def on_click(wparam, lparam):
+            if lparam in (0x0202, 0x0205):  # WM_LBUTTONUP, WM_RBUTTONUP
+                self.app.toggle_panel()
+                return 0
+            return classic(wparam, lparam)
+        handlers[key] = on_click
+        handlers[self.SHOW_MENU] = lambda wparam, lparam: classic(0, 0x0205)
+
+    def show_menu(self):
+        hwnd = getattr(self.icon, "_hwnd", None)
+        if hwnd:
+            import ctypes
+            ctypes.windll.user32.PostMessageW(hwnd, self.SHOW_MENU, 0, 0)
 
     def _toggle(self, key):
         def fn(icon, item):

@@ -96,6 +96,23 @@ def selftest(out, stt_model=None, wav=None):
         res["settings_window"] = f"ok: {n[0]} widgets"
     except Exception as e:  # noqa: BLE001
         res["settings_window"] = f"{type(e).__name__}: {e}"
+    try:  # the tray panel draws (on a hidden canvas, with made-up values)
+        import tkinter as tk
+
+        from . import panel
+        root = tk.Tk()
+        root.withdraw()
+        c = tk.Canvas(root, width=panel.W, height=600)
+        m = {"kind": "ready", "status": "Ready", "version": "0", "engine": "Parakeet on GPU", "ram": "1 MB RAM",
+             "vram": "", "last": "last 0.1 s", "call_word": "Jarvis", "always_listen": True, "paused": False,
+             "voice_replies": False, "sounds": True, "osd": True, "osd_style": "minimal", "mic": "Windows default",
+             "model": "Parakeet", "key": "F9", "mics": ["Windows default", "Mic"]}
+        h = panel.draw(c, m, lambda a: None, True)
+        root.update()
+        root.destroy()
+        res["panel"] = f"ok: {h}px"
+    except Exception as e:  # noqa: BLE001
+        res["panel"] = f"{type(e).__name__}: {e}"
     try:  # the setup check runs through (here without a mic or GPU, so some say so)
         from . import checkup
         res["checkup"] = {r["name"]: f"{r['status']}: {r['detail']}" for r in checkup.run_all()}
@@ -136,7 +153,7 @@ def selftest(out, stt_model=None, wav=None):
     with open(out, "w", encoding="utf-8") as f:
         json.dump(res, f, indent=2)
     ok = (all(v == "ok" for v in res["imports"].values()) and not bad and str(res["tray"]).startswith("ok")
-          and str(res.get("settings_window")).startswith("ok"))
+          and str(res.get("settings_window")).startswith("ok") and str(res.get("panel")).startswith("ok"))
     return 0 if ok else 1
 
 

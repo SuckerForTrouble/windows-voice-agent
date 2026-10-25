@@ -50,7 +50,13 @@ That's it. It starts with Windows and **updates itself**.
 The **tray icon** (by the clock, maybe behind the **^** arrow) shows what it's doing:
 🔵 ready · 🔴 listening · 🟠 thinking · ⚪ loading.
 
-## Settings: right-click the tray icon
+## Settings: click the tray icon
+
+Click the icon (left or right) and a small **panel** opens above it, Windows 11 style:
+what it's doing and what it uses, switches for **Always listening**, **Pause**, **Spoken answers**
+and **Beeps**, the **pill style**, your **microphone**, the **speech model**, and buttons for
+*What can I say?*, *Settings…* and *Check setup*. Click anywhere else (or Esc) to close it.
+**More options…** at the bottom opens the full menu:
 
 Out of the box it's the light setup: push-to-talk, the pill at the top of the screen, and beeps.
 Everything else is off until you tick it.
@@ -125,7 +131,6 @@ to remove them too.
 - 🗣️ **Hindi voice commands**: say commands in Hindi, not just type in it
 - ⚡ **More speed tuning**: from your setup check's Speed line
 - 💬 **Discord mute without switching to it**: for people using Vesktop or Equibop
-- 🪟 **A tray panel that opens on a click**: quick switches without the right-click menu
 
 ## Privacy
 

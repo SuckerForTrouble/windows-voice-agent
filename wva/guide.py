@@ -34,8 +34,7 @@ GROUP_INFO = {
 ROADMAP = [('🎵', 'Spotify plays the song itself', 'without popping up (needs Spotify Premium and a one-time login)'),
            ('🗣️', 'Hindi voice commands', 'say commands in Hindi, not just type in it'),
            ('⚡', 'More speed tuning', "from your setup check's Speed line"),
-           ('💬', 'Discord mute without switching to it', 'for people using Vesktop or Equibop'),
-           ('🪟', 'A tray panel that opens on a click', 'quick switches without the right-click menu')]
+           ('💬', 'Discord mute without switching to it', 'for people using Vesktop or Equibop')]
 # The first things to try. Each one is checked by the tests (tests/test_routing.py).
 STARTERS = [("🎵", "Open Spotify"), ("🪟", "Close Discord"), ("🔊", "Volume 30"), ("🎬", "Watch Interstellar"),
             ("⏱️", "Set a 10 minute timer"), ("⏭️", "Next song"), ("📸", "Take a screenshot"), ("🕒", "What time is it")]
@@ -154,7 +153,7 @@ footer{color:var(--soft);font-size:13px;text-align:center;margin-top:30px}
 <div class="stuck"><h2>Stuck?</h2>
  <div><b>Nothing happens</b> say <i>“check my setup”</i></div>
  <div><b>It hears wrong words</b> tray icon → Teach it my voice</div>
- <div><b>Want a setting</b> right-click the tray icon by the clock</div>
+ <div><b>Want a setting</b> click the tray icon by the clock</div>
 </div>
 
 <details class="more"><summary><span class="ic">🛠️</span><span class="nm">Setup tips</span><span class="ct">6 tips</span></summary>
@@ -162,7 +161,7 @@ footer{color:var(--soft);font-size:13px;text-align:center;margin-top:30px}
 <div class="r"><div class="say">Clip that</div><div class="d">Turn on Instant Replay: press <b>Alt+Z</b> in the NVIDIA app. Xbox Game Bar instead? Tray → More options → Clips with.</div></div>
 <div class="r"><div class="say">Doesn't work in one game</div><div class="d">That game runs as admin. Right-click the Voice Agent shortcut → Run as administrator.</div></div>
 <div class="r"><div class="say">Jarvis, open Spotify</div><div class="d">No key at all: tray → Always listening (pick the call word in Settings…). The mic stays on; anything that doesn't start with the call word is thrown away unseen.</div></div>
-<div class="r"><div class="say">Other key, mouse button, faster model, your apps, Hindi</div><div class="d">Right-click the tray icon → Settings…. Everything extra is off until you turn it on.</div></div>
+<div class="r"><div class="say">Other key, mouse button, faster model, your apps, Hindi</div><div class="d">Click the tray icon → Settings…. Everything extra is off until you turn it on.</div></div>
 <div class="r"><div class="say">Hears me wrong</div><div class="d">Say “export my voice history”, paste the file into Gemini or ChatGPT, copy its answer, say “import the AI answer”.</div></div>
 </details>
 <details class="more"><summary><span class="ic">🗺️</span><span class="nm">Coming later</span><span class="ct" id="rmc"></span></summary>

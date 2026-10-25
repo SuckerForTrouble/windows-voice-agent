@@ -346,6 +346,18 @@ def work_area(hwnd):
     return r.left, r.top, r.right - r.left, r.bottom - r.top
 
 
+def work_area_at_cursor():
+    """x, y, w, h of the screen the mouse is on, minus the taskbar (where the tray panel goes)."""
+    pt = wintypes.POINT()
+    user32.GetCursorPos(ctypes.byref(pt))
+    mi = MONITORINFO()
+    mi.cbSize = ctypes.sizeof(MONITORINFO)
+    user32.MonitorFromPoint.restype = wintypes.HMONITOR
+    user32.GetMonitorInfoW(user32.MonitorFromPoint(pt, 2), ctypes.byref(mi))  # MONITOR_DEFAULTTONEAREST
+    r = mi.rcWork
+    return r.left, r.top, r.right - r.left, r.bottom - r.top
+
+
 def covers_monitor(hwnd):
     """Borderless/exclusive fullscreen (how games usually run)."""
     m = _monitor_info(hwnd).rcMonitor
