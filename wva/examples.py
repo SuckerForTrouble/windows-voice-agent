@@ -81,7 +81,6 @@ CASES = [
     ("answer the phone", ["answer | decline the phone call"]),
     ("pick up my phone", ["answer | decline the phone call"]),
     ("decline the phone call", ["answer | decline the phone call"]),
-    ("Answered the phone.", ["answer | decline the phone call"]),
     ("answer the call", ["answer | decline the call (phone ringing)"], "incoming call"),
     ("pick up", ["answer | decline the call (phone ringing)"], "incoming call"),
     ("reject the call", ["answer | decline the call (phone ringing)"], "incoming call"),

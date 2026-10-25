@@ -13,7 +13,8 @@ Talk to your PC. **Hold F9, say what you want, let go.**
 
 "Open Spotify" · "close discord" (even behind your game) · "quit steam from the tray" ·
 "watch interstellar" (opens it in Stremio) · "mute me on discord" · "clip that" ·
-"scroll instagram for me" · "set a 10 minute timer" · "what's using my RAM" · and about 150 more.
+"scroll instagram for me" · "set a 10 minute timer" · "what's using my RAM" · "brave, search cats" ·
+"answer the phone" · and about 170 more.
 
 Speech recognition runs **on your own PC**, on your NVIDIA graphics card, so it's fast and
 your voice never leaves the computer.
@@ -65,11 +66,11 @@ Everything else is off until you tick it.
 |---|---|
 | **Settings…** | The same window as on the first start: talk keys (or a mouse side button), speech model, pill style, **your apps** (what "play …" uses: Spotify, YouTube Music or YouTube; what "watch …" uses: Stremio, Netflix or Prime Video; which browser "open browser" opens), always listening and its call word, and the extras. |
 | **Pause for now** | Keys and mic off until you untick it (a competitive game that wants F9, a meeting). |
-| **Always listening** | No key: say your **call word** first ("Jarvis, open Spotify"). The mic stays on, and anything that doesn't start with the call word is thrown away unseen (needs a model on your PC, not cloud). |
+| **Always listening** | No key: say your **call word** first ("Angel, open Spotify"). Several work, with commas: "Angel, Jarvis". The mic stays on, and anything that doesn't start with a call word is thrown away unseen (needs a model on your PC, not cloud). |
 | **Pill on screen** | Off, Minimal, Advanced (mic meter and timing) or Funky. |
 | **Speech model** | **Parakeet** (fastest: about a tenth of a second per command, even without a GPU; English) and **Best / Balanced / Fast** (Whisper; Best also does Hindi typing), each with its memory use and download size. The top line shows what the one in use *really* uses on your PC, and how long your last command took. Also **cloud** speech (Groq or OpenAI, your own API key, stored encrypted; your recordings go to them), and **Delete unused models**. |
 | **Microphone** | Pick which mic it listens to. |
-| **More options** | Push-to-talk keys, call word, typing language (**Hindi**), spoken answers, beeps, timing in the pill, **free the GPU while a game runs** (on: the model steps out of graphics memory while a game runs and loads back while you talk), Discord keybinds, clips with NVIDIA or Xbox, start with Windows, update by itself. |
+| **More options** | Push-to-talk keys, call words, typing language (**Hindi**), spoken answers, beeps, timing in the pill, **free the GPU while a game runs** (on: the model steps out of graphics memory while a game runs and loads back while you talk), Discord keybinds, clips with NVIDIA or Xbox, start with Windows, update by itself, and **commands from Discord audio** (dangerous, see below). |
 | **Help** | Check my setup, teach it your voice (the AI trick below), check for updates, logs. |
 
 Talk normally. "Can you open YouTube and search for lofi beats please" works. So does
@@ -120,6 +121,49 @@ every week or two.
 - **Bluetooth**: "connect my earbuds" opens Windows' Bluetooth list, and you tap the device (connecting
   by voice alone isn't reliable on Windows). "Earbuds battery" reads the battery level of connected
   headphones and controllers that report one.
+- **A browser by name**: say it first and the rest happens in that browser: "brave, search cats",
+  "in edge open youtube", "chrome new tab", "firefox, go back". At the end works for opening things:
+  "open youtube in brave", "open spotify in firefox" (its web player). "Brave settings" opens the browser's
+  own settings page. Chrome, Edge, Firefox, Brave, Opera / Opera GX, Zen and Vivaldi.
+- **Phone calls from the PC (Phone Link)**: set up Windows' **Phone Link** app with your phone once,
+  including **Calls** (it pairs over Bluetooth, so the PC becomes your phone's hands-free set and the
+  call's sound comes out of the PC). Then: "answer the phone", "decline the call", "hang up",
+  "mute the call", "move the call to my phone", "call 98765 43210", "call mom", "text rahul",
+  "open my phone's messages / photos", "mirror my phone", "clear my phone notifications".
+  What to know:
+  - Windows lets no app answer calls directly, so the agent presses Phone Link's own **Accept** /
+    **Decline** buttons (through Windows' accessibility interface; it looks at button names only and
+    keeps nothing). "Hang up" and "mute the call" use Phone Link's own keys (Ctrl+Shift+H, Ctrl+Shift+M).
+  - While a phone call rings, "answer the call" means it; otherwise it means Discord's call.
+  - "Call 98765…" sends the number to Phone Link. The first time, Windows may ask which app should
+    make calls: pick **Phone Link** and tick **Always**.
+  - "Call mom" and "text rahul" type the name into **Phone Link's** search, and you press call or
+    write the message. The agent never reads your contacts, messages, photos or call history.
+  - Answering by voice hasn't been tried with a real phone yet: if it says no call is ringing while one
+    is, click Accept yourself and send the log to whoever gave you this.
+- **The pill over games**: it shows over games in borderless or windowed mode, and over "fullscreen"
+  games that Windows runs with fullscreen optimizations, which is most of them on Windows 10 and 11.
+  A game in true **exclusive fullscreen** owns the screen: nothing can be drawn over it without hooking
+  into the game itself, which anti-cheat treats as cheating, so the agent never does that. It notices
+  when that happens: answers are then **said out loud** (even with spoken answers off), and a command
+  it didn't understand beeps. Want the pill? Switch the game to borderless in its video settings.
+
+## ⚠️ Commands from Discord audio (dangerous, off by default)
+
+Tray → More options → **Commands from Discord audio**. While it's on, what your Discord call plays is
+listened to like Always listening: when someone in the call says the call word ("Angel, open
+Spotify"), **the command runs on your PC**. A window explains the risk first, and you have to tick a
+box before the red button works.
+
+- **Anyone in the call can do anything you can by voice**: close your game, type, press keys, open
+  websites, shut down or restart the PC. **Nothing is blocked or filtered.** A troll, a soundboard or
+  a video someone streams can do it too. Use it only with people you trust completely.
+- It **turns off whenever the agent restarts** and is never saved. Untick it in the tray to stop sooner.
+  It also stops when Discord closes or you pause the agent.
+- The pill marks those commands **FROM DISCORD**, so you know it wasn't you.
+- On **Windows 11** it hears Discord only. On **Windows 10** Windows can't separate one app's sound, so
+  it hears everything the PC plays (games, videos, music) and a video saying the call word counts too.
+- It needs a speech model on your PC: your friends' voices are never sent to a cloud model.
 
 ## When something's off
 
@@ -155,7 +199,10 @@ to remove them too.
 - What you say is turned into text **on your PC**. No audio is ever uploaded.
 - The mic is only open while you hold (or have tapped) the key, unless you turn on
   **Always listening**. Then it stays open, but a phrase that doesn't start with your call word is
-  dropped on the spot: never shown, saved or logged.
+  dropped on the spot: never shown, saved or logged. **Commands from Discord audio** work the same way
+  with what Discord plays, and never with a cloud model.
+- Phone Link: the agent never reads your contacts, messages, photos or call history. To answer a call
+  it looks for the Accept button by name, and nothing it sees is kept.
 - The voice history stays on your PC. It only goes anywhere if *you* export it and paste it into an AI.
 - The app goes online only to download the speech model, check GitHub for updates, get the
   weather (wttr.in), look up movie names for Stremio (Stremio's own catalog), and open what you ask for.
@@ -191,7 +238,9 @@ python3 -m wva --list                      # every command
 | `wva/rules.py` | every command: phrasings → action, in priority order |
 | `wva/examples.py` | example phrases: the tests and the voice guide both use them |
 | `wva/actions.py`, `extras.py`, `system.py` | what commands do on Windows (Spotify, Discord, Stremio… in `extras`) |
-| `wva/apps.py` | open/close by name: Start menu, Store apps, Steam/Epic games, sites, process names |
+| `wva/apps.py` | open/close by name: Start menu, Store apps, Steam/Epic games, sites, process names, a browser by name |
+| `wva/phone.py` | Phone Link: answer / decline / hang up (UI Automation + its own keys), call, text, its pages |
+| `wva/listen.py`, `loopback.py` | always listening and call words; commands from Discord audio (WASAPI loopback) |
 | `wva/app.py` | the running agent: tray, keys, mic → whisper → commands |
 | `wva/stt.py` | speech models: whisper-server and our parakeet-server (`native/`, both GPU via Vulkan with a CPU fallback), cloud, model downloads |
 | `wva/guide.py`, `checkup.py`, `tuning.py` | voice guide, setup check, AI tuning export/import |

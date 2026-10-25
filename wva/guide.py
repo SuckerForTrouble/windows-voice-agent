@@ -158,11 +158,13 @@ footer{color:var(--soft);font-size:13px;text-align:center;margin-top:30px}
  <div><b>Want a setting</b> click the tray icon by the clock</div>
 </div>
 
-<details class="more"><summary><span class="ic">🛠️</span><span class="nm">Setup tips</span><span class="ct">6 tips</span></summary>
+<details class="more"><summary><span class="ic">🛠️</span><span class="nm">Setup tips</span><span class="ct">8 tips</span></summary>
 <div class="r"><div class="say">Mute me on Discord</div><div class="d"><b>Equibop</b>: works inside games as it is. <b>Discord</b> (also with Vencord or Equicord): add the keybinds Toggle Mute = <b>Ctrl+Shift+Alt+M</b> and Toggle Deafen = <b>Ctrl+Shift+Alt+D</b> in Discord → Settings → Keybinds, then tray → More options → tick <b>Discord keybinds</b>. <b>Vesktop</b>: flicks to it and back (it has no mute command). The setup check says which one you have.</div></div>
 <div class="r"><div class="say">Clip that</div><div class="d">Turn on Instant Replay: press <b>Alt+Z</b> in the NVIDIA app. Xbox Game Bar instead? Tray → More options → Clips with.</div></div>
 <div class="r"><div class="say">Doesn't work in one game</div><div class="d">That game runs as admin. Right-click the Voice Agent shortcut → Run as administrator.</div></div>
-<div class="r"><div class="say">Jarvis, open Spotify</div><div class="d">No key at all: tray → Always listening (pick the call word in Settings…). The mic stays on; anything that doesn't start with the call word is thrown away unseen.</div></div>
+<div class="r"><div class="say">Angel, open Spotify</div><div class="d">No key at all: tray → Always listening (pick the call words in Settings…, several with commas: Angel, Jarvis). The mic stays on; anything that doesn't start with a call word is thrown away unseen.</div></div>
+<div class="r"><div class="say">Answer the phone</div><div class="d">Set up Windows' <b>Phone Link</b> app with your phone, Calls included. The call's sound comes out of the PC. The agent presses Phone Link's own buttons and never reads your contacts or messages.</div></div>
+<div class="r"><div class="say">No pill in my game</div><div class="d">The game is in <b>exclusive fullscreen</b>: nothing can draw over it. Answers are said out loud instead. For the pill, set the game to borderless.</div></div>
 <div class="r"><div class="say">Other key, mouse button, faster model, your apps, Hindi</div><div class="d">Click the tray icon → Settings…. Everything extra is off until you turn it on.</div></div>
 <div class="r"><div class="say">Hears me wrong</div><div class="d">Say “export my voice history”, paste the file into Gemini or ChatGPT, copy its answer, say “import the AI answer”.</div></div>
 </details>

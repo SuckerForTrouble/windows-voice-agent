@@ -1,10 +1,10 @@
 """Always listening (opt-in, tray → Always listening): no key needed, say the call word
-first ("Jarvis, open Spotify").
+first ("Angel, open Spotify"; several call words work, comma-separated).
 
 The mic stays open. A light voice detector (loudness against the room's own noise
 level) cuts out each spoken phrase; only phrases go to the speech model. A phrase
 that doesn't start with the call word is thrown away: it is never shown, logged or
-written to the history. The call word alone ("Jarvis…") waits a few seconds for
+written to the history. The call word alone ("Angel…") waits a few seconds for
 the command, like a smart speaker. Never with a cloud model: that would send
 everything said near the mic to the cloud."""
 import array

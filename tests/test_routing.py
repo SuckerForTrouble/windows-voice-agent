@@ -98,7 +98,8 @@ def test_mishearings():
                        ("Opened Chrome, searched cats", ["open <app | game | site | folder | settings page>", "search <text>"]),
                        ("Pressed enter and then closed tab", ["press <key>", "close tab"]),
                        ("Turning off wifi", ["wifi | bluetooth on | off"]), ("Muted this court", ["mute me on Discord"]),
-                       ("Finding Nemo", []), ("settings", ["<app name>"])]:
+                       ("Finding Nemo", []), ("settings", ["<app name>"]),
+                       ("Answered the phone.", ["answer | decline the phone call"])]:
         got = [r.say for r, _, _ in route(text)]
         assert got == want, f"{text!r}: want {want}, got {got}"
     # only the first word of a command changes form: what gets typed keeps its words
