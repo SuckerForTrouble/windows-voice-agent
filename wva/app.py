@@ -607,7 +607,7 @@ class App:
                 history.record(via=via, heard=heard, clean=engine.clean(text), result="unmatched")
                 learn.note(text, False, via)
                 beep("error")
-                choices.offer("Did you mean?", [(p, what, p) for p, what in options],
+                choices.offer("Did you mean?", [(p, "", p) for p, _ in options],
                               lambda p, said=text: learn.picked(said, p, lambda q: self.run_text(q, woke=True)),
                               "Say “the first one”, “the second one”… or say it again")
                 return

@@ -166,7 +166,7 @@ footer{color:var(--soft);font-size:13px;text-align:center;margin-top:30px}
 <div class="r"><div class="say">Answer the phone</div><div class="d">Set up Windows' <b>Phone Link</b> app with your phone, Calls included. The call's sound comes out of the PC. The agent presses Phone Link's own buttons and never reads your contacts or messages.</div></div>
 <div class="r"><div class="say">No pill in my game</div><div class="d">The game is in <b>exclusive fullscreen</b>: nothing can draw over it. Answers are said out loud instead. For the pill, set the game to borderless.</div></div>
 <div class="r"><div class="say">Other key, mouse button, faster model, your apps, Hindi</div><div class="d">Click the tray icon → Settings…. Everything extra is off until you turn it on.</div></div>
-<div class="r"><div class="say">Hears me wrong</div><div class="d">Say “export my voice history”, paste the file into Gemini or ChatGPT, copy its answer, say “import the AI answer”.</div></div>
+<div class="r"><div class="say">Hears me wrong</div><div class="d">Just say it again another way: it learns what you meant (the pill says “Learned: …”; “forget that” undoes it). Right after a wrong command, say “no, that's wrong” first. For a big clean-up: “export my voice history”, paste the file into Gemini or ChatGPT, copy its answer, say “import the AI answer”.</div></div>
 </details>
 <details class="more"><summary><span class="ic">🗺️</span><span class="nm">Coming later</span><span class="ct" id="rmc"></span></summary>
 <div id="roadmap"></div></details>

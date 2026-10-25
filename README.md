@@ -78,8 +78,26 @@ chaining: "new tab, type hello, press enter".
 
 ## Make it understand *you* better
 
-Everyone's accent is different. The agent keeps a list (on your PC only) of what it
-didn't understand. Any free AI can turn that into fixes:
+It learns by itself as you use it:
+
+- **Say it again.** When it doesn't get something and you say it differently within 10 seconds,
+  it remembers what you meant: straight away when the two sound alike ("open spotty" → "open
+  Spotify"), otherwise the second time it happens. The pill says **"Learned: … means …"**. Say
+  **"forget that"** right after to undo it.
+- **"No, that's wrong"** right after a command it got wrong, then say it again: that's learned too
+  (the second time, so one slip can't change a command that works).
+- **"Did you mean?"**: when nothing fits, it shows the closest commands. Say **"the first one"**
+  (that's learned on the spot). When one is very close it just runs it, and the pill says
+  "Took it as …". It never guesses its way into shutting down, restarting or quitting apps.
+- **Names heard a little wrong** still work: "open vesk top", "launch dead lock", "close spottify".
+- With a Whisper model it listens a second time, more carefully, before saying it didn't
+  understand, and it's told your call words, your games and the commands you use most.
+
+Everything it learns goes into your tuning file (tray → Help → Teach it my voice → Open my
+tuning file), where you can also delete a line by hand.
+
+For a bigger clean-up, any free AI can go through everything it didn't understand. The agent
+keeps that list on your PC only:
 
 1. Say **"export my voice history"** (or tray → Teach it my voice → 1). A file called
    `tune-me.txt` opens. It's also on your Desktop.
@@ -172,12 +190,23 @@ box before the red button works.
 - **"Open Instagram" opens the website**: it opens the Instagram app if one is installed from the
   Microsoft Store (same for Netflix, ChatGPT…). "Scroll Instagram" uses the website's Reels page;
   in the app, open Reels yourself and say "doom scroll".
-- **It hears the wrong words**: do the AI trick above, and check the right mic is picked (tray → Microphone).
+- **It hears the wrong words**: say "check my setup" and look at the **Microphone** line: it records
+  the room for 3 seconds and says if your voice comes through too quiet, distorted or under a lot of
+  noise, and what to do. Laptop mics (a "Microphone Array") hear the fans and keyboard: a headset mic
+  is far better. With an **NVIDIA RTX** card, the free **NVIDIA Broadcast** app removes background
+  noise: install it, then tray → Microphone → "Microphone (NVIDIA Broadcast)". Also check the right
+  mic is picked (tray → Microphone), and do the AI trick above.
+- **It cuts off my last word**: it already keeps listening 0.3 s after you let go. Let go a moment later.
 - **Commands do nothing inside one particular game**: that game runs as administrator. Right-click
   the Windows Voice Agent shortcut → Run as administrator.
-- **Slow, or "running on the CPU" in the setup check**: update your NVIDIA driver and restart
-  the agent. The setup check's **Speed** line shows how long commands take. Still slow?
-  Tray → Speech model → **Parakeet** (the fastest), or **Balanced** / **Fast**.
+- **Slow** (the setup check's **Speed** line): it times the model on a sample sentence three times
+  and shows the first and the best try. A slow first try is the graphics card getting ready; that now
+  happens while the agent starts. If the GPU is still slow, the check also times the CPU and switches
+  to it when that's faster (it says so). Laptops: plug in, because on battery the GPU slows right
+  down. Also update the NVIDIA driver, and close heavy apps. Still slow? Tray → Speech model →
+  **Parakeet** (the fastest), or send the logs folder: it lists the graphics cards and every command's
+  timing. A laptop with two graphics chips can be pointed at one by its number in `logs\parakeet.log`
+  (`ggml_vulkan: 0 = …`): put `"gpu_device": "1"` in the settings file (tray → Help → Open the settings file).
 - **The first command in a game takes a few seconds**: that's the model loading back after it
   stepped out of graphics memory for the game. Rather keep it loaded? Tray → More
   options → untick "Free the GPU while a game runs".
@@ -241,6 +270,7 @@ python3 -m wva --list                      # every command
 | `wva/apps.py` | open/close by name: Start menu, Store apps, Steam/Epic games, sites, process names, a browser by name |
 | `wva/phone.py` | Phone Link: answer / decline / hang up (UI Automation + its own keys), call, text, its pages |
 | `wva/listen.py`, `loopback.py` | always listening and call words; commands from Discord audio (WASAPI loopback) |
+| `wva/learn.py` | learning from retries, "did you mean?", "no, that's wrong", "forget that" |
 | `wva/app.py` | the running agent: tray, keys, mic → whisper → commands |
 | `wva/stt.py` | speech models: whisper-server and our parakeet-server (`native/`, both GPU via Vulkan with a CPU fallback), cloud, model downloads |
 | `wva/guide.py`, `checkup.py`, `tuning.py` | voice guide, setup check, AI tuning export/import |
