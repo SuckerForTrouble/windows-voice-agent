@@ -117,6 +117,8 @@ class Pill:
         c, m = self.c, self.msg
         c.delete("all")
         style = config.get("osd_style")
+        if m["kind"] == "pick":
+            return self._pick(c, m)
         if style == "advanced":
             return self._advanced(c, m)
         if style == "funky":
@@ -193,6 +195,37 @@ class Pill:
         c.create_rectangle(1, 16, 4, h - 16, fill=accent, outline="")  # the colour strip on the left
         return w, h
 
+    def _pick(self, c, m):
+        """'Which one?': a short numbered list, the same in every style. chips: (name, folder) pairs."""
+        pad, fb, fs = 16, self.font["body"], self.font["small"]
+
+        def cut(text, font, room):
+            while text and font.measure(text) > room:
+                text = text[:-2] + "…" if len(text) > 2 else ""
+            return text
+        rows = list(m["chips"])[:5]
+        w = min(self.screen_w - 40, max(340, pad * 2 + 40 + max(fb.measure(n) + fs.measure(d) + 24 for n, d in rows)), 560)
+        y = pad
+        c.create_oval(pad, y + 2, pad + 12, y + 14, fill=ACCENT["info"], outline="")
+        c.create_text(pad + 20, y + 8, text=m["title"] or "Which one?", anchor="w", fill=INK, font=self.font["title"])
+        y += 28
+        for i, (name, where) in enumerate(rows, 1):
+            _rounded(c, pad, y, w - pad, y + 30, 10, fill=CHIP, outline="")
+            _rounded(c, pad + 6, y + 5, pad + 26, y + 25, 10, fill=ACCENT["info"], outline="")
+            c.create_text(pad + 16, y + 15, text=str(i), fill=BG, font=self.font["title"])
+            where = cut(where, fs, (w - 2 * pad) * 0.35)
+            c.create_text(w - pad - 10, y + 15, text=where, anchor="e", fill=SOFT, font=fs)
+            room = w - 2 * pad - 50 - fs.measure(where) - 16
+            c.create_text(pad + 36, y + 15, text=cut(name, fb, room), anchor="w", fill=INK, font=fb)
+            y += 36
+        if m["footer"]:
+            c.create_text(pad, y + 2, text=m["footer"], anchor="nw", fill=SOFT, font=fs)
+            y += 20
+        h = y + pad - 4
+        bg = _rounded(c, 0, 0, w, h, 16, fill=BG, outline=LINE)
+        c.tag_lower(bg)
+        return w, h
+
     def _funky(self, c, m):
         kind = m["kind"]
         t = time.time() - self.t0
@@ -226,7 +259,7 @@ class Pill:
 
     def animated(self):
         style, kind = config.get("osd_style"), self.msg["kind"] if self.msg else ""
-        return bool(self.msg) and (style == "funky" or kind in ("listen", "busy"))
+        return bool(self.msg) and ((style == "funky" and kind != "pick") or kind in ("listen", "busy"))
 
 
 def _loop():

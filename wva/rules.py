@@ -4,12 +4,14 @@ come before the general ones ("mute discord" is Discord's mic, "mute" the speake
 import re
 
 from . import actions as a
+from . import audio as au
+from . import choices as ch
 from . import extras as x
 from . import files as fl
 from . import system as s
 from .engine import num, parse_duration, rule
 
-FO = "Files & folders"
+FO, SD = "Files & folders", "Sound devices"
 R, YT, DC, SP, ST, G, C = ("Reels & Shorts", "YouTube", "Discord", "Spotify", "Stremio & watching", "Gaming",
                           "Close & switch apps")
 H, B, K, W, S, AU, SY, I, T, A = ("Voice agent", "Browser", "Keyboard", "Windows", "Sound & media", "App volume",
@@ -386,9 +388,6 @@ rule(S, "mute | unmute", "Speakers",
      lambda st: a.mute_sound({"mute": True, "off": True, "silence": True, "unmute": False, "on": False}[st]))
 rule(S, "mute mic", "Your microphone, for every app",
      [r"(?:mute|unmute|toggle) (?:the |my )?(?:mic|microphone)(?: everywhere)?"], a.mute_mic)
-rule(S, "switch audio output", "Win+Ctrl+V: pick speakers / headphones",
-     [r"(?:switch|change|pick|choose) (?:the )?(?:audio|sound)(?: output)?(?: device)?", r"(?:switch|change) (?:the )?output(?: device)?",
-      r"(?:switch|change) to (?:my )?(?:headphones|speakers|headset|earbuds)"], lambda: a.keys("ctrl+win+v"))
 rule(S, "pause | play | stop music", "Whatever is playing (Spotify, the browser, Stremio…)",
      [r"(pause|play|resume|stop|continue|unpause|start)(?: playing)? " + MEDIA,
       r"(pause|stop) (?:it|this|that)", r"(?:keep|carry on) (playing)", r"(play)(?: some)? music", r"(stop) playing"],
@@ -420,6 +419,36 @@ rule(S, "go to <n> minutes [<n>]", "'go to 1 minute 30', 'skip to 90 seconds'",
      [r"(?:go|skip|jump|seek|fast forward) to (.+?) (minutes?|seconds?)(?: (?:and )?(.+?)(?: seconds?)?)?"],
      a.seek_abs, guard=lambda n, u, e=None: num(n) is not None and (e is None or num(e) is not None))
 
+# Sound devices -----------------------------------------------------------------------
+DEV = r"(?:the |my )?(.+?)"
+rule(SD, "use the <name> mic", "Your default microphone: 'use the headset mic', 'switch mic to the webcam'",
+     [rf"(?:switch|change|set) (?:the |my )?(?:mic|microphone|input)(?: device)? to {DEV}(?: (?:mic|microphone))?",
+      rf"use {DEV} (?:mic|microphone)(?: instead)?", rf"(?:switch|change) to {DEV} (?:mic|microphone)"],
+     lambda n: au.switch(n, au.CAPTURE), guard=lambda n: len(n) > 1)
+rule(SD, "switch to headphones | speakers", "Makes it Windows' sound output, by any part of its name: 'switch to the tv', 'use my hyperx'",
+     [rf"(?:switch|change|set|move|put) (?:the )?(?:audio|sound|output|audio output|sound output|playback)(?: device)? (?:to|on) {DEV}",
+      rf"(?:switch|change|go) (?:over )?to {DEV}(?: (?:output|audio|sound))?", rf"use {DEV}(?: (?:output|audio|sound))?",
+      rf"(?:play (?:the )?(?:audio|sound|it) |audio |sound )(?:on|through|from|out of|to) {DEV}"],
+     lambda n: au.switch(n), guard=lambda n: au.device_like(n) and not re.search(r"\b(?:mic|microphone)$", n))
+rule(SD, "switch audio output", "With two outputs, the other one; with more, a short list",
+     [r"(?:switch|change|pick|choose|toggle|swap|cycle) (?:the )?(?:audio|sound)(?: output)?(?: device)?",
+      r"(?:switch|change|toggle|swap) (?:the )?output(?: device)?", r"next (?:audio|sound|output) (?:device|output)"], au.switch_next)
+rule(SD, "which output am I using", "The speakers or headphones in use, and the mic",
+     [r"(?:which|what) (?:audio |sound )?(?:output|device|speakers?|headphones|audio device|sound device|output device)(?: is it| am i using| is (?:on|active|selected|in use|playing)| is this)",
+      r"what(?:'s| is) (?:my |the )?(?:current |active )?(?:audio|sound) (?:output|device)", r"where(?:'s| is) (?:the )?sound (?:going|coming out)",
+      r"(?:which|what) (?:mic|microphone) am i using"], au.current, wake=True)
+rule(SD, "list audio devices", "A numbered list: 'the second one' switches to it",
+     [r"(?:list|show)(?: me)? (?:my |the |all )?(?:audio|sound|playback)(?: output)? (?:devices|outputs)", r"(?:list|show)(?: me)? (?:my |the |all )?outputs",
+      r"what (?:audio|sound) (?:devices|outputs) do i have"], lambda: au.list_devices(), wake=True)
+rule(SD, "list microphones", "", [r"(?:list|show)(?: me)? (?:my |the |all )?(?:mics|microphones|input devices|inputs)",
+                                 r"what (?:mics|microphones) do i have"], lambda: au.list_devices(au.CAPTURE), wake=True)
+rule(SD, "<app> on the speakers", "One app's sound on one output ('spotify on the speakers', 'discord to my headphones', "
+     "'spotify on the default output'). Uses an undocumented part of Windows: may break after a big update",
+     [rf"(?:play |move |send |put |switch |route |output )?(?:the |my )?(.+?)(?:'s)? (?:audio |sound )?(?:on|to|through|out of|via|into) {DEV}"],
+     lambda app, n: au.app_output(a.sound_app(app), a._sound_exes(a.sound_app(app)), n),
+     guard=lambda app, n: a.sound_app(app) is not None and (au.device_like(n) or bool(re.fullmatch(
+         r"(?:the )?(?:default|normal|usual)(?: output| device| one)?", n))))
+
 # App volume --------------------------------------------------------------------------
 rule(AU, "<app> volume <n> | up | down", "One app only: 'spotify volume 30', 'turn discord down', 'game volume 50'",
      [r"(?:set |turn |change |put )?(?:the )?(.+?)(?:'s)? volume (?:to |at )?(.+?)(?: percent)?",
@@ -429,6 +458,15 @@ rule(AU, "<app> volume <n> | up | down", "One app only: 'spotify volume 30', 'tu
 rule(AU, "mute | unmute <app>", "One app's sound: 'mute spotify', 'mute the browser', 'mute the game'",
      [r"(mute|unmute|silence) (?:the |my )?(.+?)(?:'s)?(?: sound| audio)?"], a.app_mute,
      guard=lambda st, n: a.sound_app(n) is not None)
+
+rule(SD, "headphones volume <n> | up | down", "One output, even the one not in use: 'speakers volume 40', 'turn the headphones down'",
+     [rf"(?:set |turn |change |put )?{DEV}(?:'s)? volume (?:to |at )?(.+?)(?: percent)?", rf"(?:turn|make) {DEV} (up|down|louder|quieter|softer)"],
+     lambda n, sp: au.device_volume(n, sp),
+     guard=lambda n, sp: au.device_like(n) and (sp in ("up", "down", "louder", "quieter", "softer")
+                                              or (num(sp) if num(sp) is not None else -1) in range(0, 101)))
+rule(SD, "mute | unmute the headphones", "One output: 'mute the speakers' while the headphones stay on",
+     [rf"(mute|unmute|silence) {DEV}"], lambda st, n: au.device_mute(st, n),
+     guard=lambda st, n: au.device_like(n) and not re.fullmatch(r"(?:the |my )?speakers?", n))
 
 # System ------------------------------------------------------------------------------
 rule(SY, "screenshot", "Region (Win+Shift+S)",
@@ -470,6 +508,14 @@ rule(SY, "connect to wifi <name>", "One of the networks Windows already knows",
       r"(?:switch|change) (?:the )?wifi to (.+)"], lambda n: s.wifi_connect(n), wake=True, free=True)
 rule(SY, "disconnect wifi", "", [r"disconnect (?:from )?(?:the )?(?:wifi|wi-fi|network)", r"(?:leave|drop) (?:the )?(?:wifi|wi-fi)"],
      s.wifi_disconnect, wake=True)
+BT = r"(earbuds|ear buds|headphones|headset|airpods|buds|bluetooth(?: device| headphones| speaker| earbuds)?|speaker|controller)"
+rule(SY, "connect my earbuds", "Opens Windows' Bluetooth list: one tap connects (headphones, speaker, controller)",
+     [rf"(?:connect|pair|disconnect|reconnect) (?:to )?(?:my |the )?{BT}", r"(?:show |open )?(?:my |the )?bluetooth (devices|panel|menu|list)",
+      r"(?:pair|add) a (?:new )?(bluetooth) device"], lambda d=None: s.bluetooth_panel(), wake=True)
+rule(SY, "earbuds battery", "Battery of connected Bluetooth headphones, controllers…",
+     [rf"(?:how much )?(?:battery|charge) (?:is )?(?:left )?(?:on|in) (?:my |the )?{BT}",
+      rf"(?:what(?:'s| is) |check )?(?:my |the )?{BT} (?:battery|charge)(?: level| left| percentage)?",
+      rf"how (?:much )?(?:charged|charge) (?:are|is) (?:my |the )?{BT}"], lambda d=None: s.bluetooth_battery(d), wake=True)
 rule(SY, "wifi | bluetooth on | off", "Windows' radio switches",
      [r"(?:turn |switch )?(on|off|enable|disable) (?:the )?(wifi|bluetooth)", r"(?:turn |switch )?(?:the )?(wifi|bluetooth) (on|off)"],
      lambda p, q: s.radio(*((q, p) if p in ("on", "off", "enable", "disable") else (p, q))))
@@ -558,6 +604,10 @@ rule(T, "pause | resume timer", "'pause the timer', 'resume my pizza timer'",
 
 # Files & folders ---------------------------------------------------------------------
 LAST = r"(?:last|latest|newest|most recent|recent)"
+NTH = r"(first|second|third|fourth|fifth|top|last|bottom|1st|2nd|3rd|4th|5th|one|two|to|too|three|four|five|1|2|3|4|5)"
+rule(FO, "the second one", "When the pill shows a short list (files that fit, your sound outputs): 'the first one', 'number three'",
+     [rf"(?:open |pick |choose |select |take |use )?(?:the )?{NTH}(?: one| file| folder| item| output)?", rf"(?:open |pick )?number {NTH}"],
+     lambda n: ch.pick(n), guard=lambda n: ch.waiting())
 rule(FO, "open my last download | screenshot | clip", "The newest one: 'open my last download', 'open the latest screenshot'",
      [rf"(?:open|play|show me|view) (?:my |the )?{LAST} (download|screenshot|clip|recording)s?",
       r"open (?:what|the thing|the file) i (?:just )?(download)ed", rf"(?:open|play) (?:my |the )?{LAST} (?:game )?(clip)"],

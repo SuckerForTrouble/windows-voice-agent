@@ -64,7 +64,7 @@ def test_examples_run_dry():
 
 def test_every_rule_has_an_example():
     covered = {s for case in CASES for s in case[1]}
-    state_only = {"stop scrolling"}  # needs a doom scroll running
+    state_only = {"stop scrolling", "the second one"}  # need a doom scroll running / a list on the pill
     missing = [r.say for r in engine.RULES if r.say not in covered and r.desc and r.say not in state_only]
     assert not missing, f"rules without an example: {missing}"
 
@@ -179,6 +179,103 @@ def test_chain_shortcut():
     assert [r.say for r, _, _ in streamline(route("open stremio and search interstellar"))] == ["search <text>"]
     assert len(streamline(route("New tab, type hello world, press enter"))) == 3
     assert len(streamline(route("open notepad and type hello"))) == 2
+
+
+def test_file_names():
+    """Misspelt, shortened and sound-alike file names: what friends will say (2026-10-25)."""
+    import time
+
+    from wva import files as fl
+    now = time.time()
+    names = ["Documents/budget_2026_final.xlsx", "Documents/resume.pdf", "Documents/School/assgnmt_chem.docx",
+             "Documents/School/Physics Assignment 4.docx", "Documents/School/Physics Assignment 3.docx",
+             "Downloads/setup.exe", "Pictures/IMG_2041.jpg", "Documents/MyResumeOld.docx", "Documents/homework.docx",
+             "Documents/Bio notes.txt", "Desktop/Minecraft Mods.zip", "Documents/project-management-plan.pdf",
+             "Documents/photos list.txt"]
+    found = [(f"C:/Users/x/{n}", now - i * 86400 * 5, False) for i, n in enumerate(names)]
+    for query, want in [("budjet", "budget_2026_final.xlsx"), ("rezume", "resume.pdf"),
+                        ("chemistry assignment", "assgnmt_chem.docx"), ("fizzics assignment 4", "Physics Assignment 4.docx"),
+                        ("physics assignment three", "Physics Assignment 3.docx"), ("home work", "homework.docx"),
+                        ("biology notes", "Bio notes.txt"), ("resume pdf", "resume.pdf"), ("my old resume", "MyResumeOld.docx"),
+                        ("project management", "project-management-plan.pdf"), ("fotos list", "photos list.txt")]:
+        r = fl.rank(query, found=found)
+        got = r[0][2].split("/")[-1] if r else None
+        assert got == want and fl.decide(r) == "open", f"{query!r}: want {want}, got {got} ({fl.decide(r)})"
+    r = fl.rank("fizzics assignment", found=found)  # two fit as well: it asks
+    assert fl.decide(r) == "pick" and {p.split("/")[-1] for _, _, p in r[:2]} == {"Physics Assignment 4.docx", "Physics Assignment 3.docx"}
+    assert fl.decide(fl.rank("zzz qqq", found=found)) == "none"
+    two = found + [("C:/Users/x/Documents/budget_2025.xlsx", now - 86400 * 30, False)]
+    assert fl.decide(fl.rank("budget", found=two)) == "pick"
+    fl.remember("the budget", "C:/Users/x/Documents/budget_2025.xlsx")  # picked from the list once
+    try:
+        r = fl.rank("budget", found=two)
+        assert fl.decide(r) == "open" and r[0][2].endswith("budget_2025.xlsx")
+    finally:
+        fl.PICKS.unlink()
+
+
+def test_pick_from_list():
+    import time
+
+    from wva import choices
+    assert [r.say for r, _, _ in route("the second one")] != ["the second one"], "no list, no pick"
+    choices.PENDING.update(items=[("a", "", 1), ("b", "", 2), ("c", "", 3)], act=print, until=time.time() + 20)
+    try:
+        for text in ("the second one", "number two", "open the 3rd one", "the last one", "two", "first", "pick number 3"):
+            got = [r.say for r, _, _ in route(text)]
+            assert got == ["the second one"], f"{text!r} -> {got}"
+    finally:
+        choices.PENDING.update(items=[], act=None, until=0.0)
+
+
+def test_shortcut_target():
+    """A Windows shortcut's target, from a .lnk built the way MS-SHLLINK lays it out
+    (CI also reads one that Windows itself made)."""
+    import struct
+    import tempfile
+
+    from wva import files as fl
+
+    def lnk(target, unicode):
+        vol = struct.pack("<4I", 17, 3, 0x1234, 16) + b"\0"
+        head = 0x24 if unicode else 0x1C
+        ansi = target.encode("cp1252") + b"\0"
+        body = vol + ansi + b"\0"  # the local base path, then an empty common path suffix
+        offs = [head + len(vol), head + len(vol) + len(ansi)]
+        if unicode:
+            wide = target.encode("utf-16-le") + b"\0\0"
+            offs += [head + len(body), head + len(body) + len(wide)]
+            body += wide + b"\0\0"
+        info = struct.pack("<7I", head + len(body), head, 1, head, offs[0], 0, offs[1])
+        if unicode:
+            info += struct.pack("<2I", offs[2], offs[3])
+        flags = 0x2 | 0x80 | 0x1
+        idlist = struct.pack("<H", 4) + b"\x02\0\0\0"
+        return struct.pack("<I16sI", 0x4C, b"\x01\x14\x02" + b"\0" * 13, flags) + b"\0" * 52 + idlist + info + body
+    with tempfile.TemporaryDirectory() as d:
+        for unicode in (False, True):
+            p = os.path.join(d, f"t{unicode}.lnk")
+            with open(p, "wb") as f:
+                f.write(lnk(r"C:\Users\x\Documents\budget 2026.xlsx", unicode))
+            assert fl.lnk_target(p) == r"C:\Users\x\Documents\budget 2026.xlsx", (unicode, fl.lnk_target(p))
+        with open(os.path.join(d, "junk.lnk"), "wb") as f:
+            f.write(b"not a shortcut")
+        assert fl.lnk_target(os.path.join(d, "junk.lnk")) is None
+
+
+def test_sound_devices():
+    """Spoken names against real-looking Windows device names; Bluetooth battery lines."""
+    from wva import audio, system
+    devs = [("a", "Speakers (Realtek(R) Audio)", True), ("b", "Headphones (2- HyperX Cloud II Wireless)", False),
+            ("c", "LG ULTRAGEAR (NVIDIA High Definition Audio)", False), ("d", "Headset Earphone (Galaxy Buds2)", False)]
+    for said, want in [("headphones", "b"), ("my hyperx", "b"), ("the speakers", "a"), ("the tv", "c"), ("monitor", "c"),
+                       ("galaxy buds", "d"), ("my earbuds", "d"), ("laptop", "a"), ("toaster", None)]:
+        got = audio.best(said, devs)
+        assert (got[0] if got else None) == want, f"{said!r}: want {want}, got {got}"
+    assert audio.device_like("my headphones") and audio.device_like("the tv")
+    assert not audio.device_like("the second monitor") and not audio.device_like("chrome")
+    lines = "Galaxy Buds2 Hands-Free AG\t80\nGalaxy Buds2 Avrcp Transport\t85\nXbox Wireless Controller\t40\nnoise\t\n"
+    assert system.bt_batteries(lines) == {"Galaxy Buds2": 80, "Xbox Wireless Controller": 40}
 
 
 def test_stremio_parse():

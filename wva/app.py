@@ -659,6 +659,8 @@ def main():
     app = App()
     ui.handlers.update(
         notify=lambda m: osd.show(m, "info", 4 + len(m) / 40) if config.get("osd") else app.tray.notify(m),
+        choose=lambda title, items, footer, secs: osd.show("", "pick", secs, title=title, chips=items, footer=footer)
+        if config.get("osd") else app.tray.notify(f"{title} " + "  ".join(f"{i}. {n}" for i, (n, _) in enumerate(items, 1))),
         speak=speak.say,
         update=lambda: app.check_updates(interactive=True),
     )

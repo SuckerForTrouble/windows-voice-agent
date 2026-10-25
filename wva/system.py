@@ -155,6 +155,57 @@ def wifi_disconnect():
     ui.notify("Wi-Fi disconnected")
 
 
+def bluetooth_panel():
+    """'connect my earbuds': Windows 11's Bluetooth list in Quick Settings (one tap connects).
+    Connecting by voice alone isn't reliable on Windows, so it stops at the list."""
+    if CTX.dry:
+        return log("open the Bluetooth device list (Quick Settings)")
+    import sys
+    try:
+        if sys.getwindowsversion().build < 22621:  # the deep link came with Windows 11 22H2
+            raise OSError
+        os.startfile("ms-actioncenter:controlcenter/bluetooth")
+    except OSError:
+        os.startfile("ms-settings:bluetooth")
+    ui.notify("Tap your device to connect or disconnect it")
+
+
+# Battery of Bluetooth devices, as Windows shows it in Settings (DEVPKEY_Bluetooth_Battery)
+_BT_BATTERY = r"""
+$ids = Get-PnpDevice -PresentOnly | Where-Object { $_.InstanceId -match '^(BTHENUM|BTHLE|BTHHFENUM|BTHLEDEVICE)' }
+$ids | ForEach-Object {
+  $b = Get-PnpDeviceProperty -InstanceId $_.InstanceId -KeyName '{104EA319-6EE2-4701-BD47-8DDBF425BBE5} 2' -ErrorAction SilentlyContinue
+  if ($b -and $b.Data -ne $null) { "$($_.FriendlyName)`t$($b.Data)" }
+}
+"""
+
+
+def bt_batteries(text):
+    """'Galaxy Buds2 Hands-Free AG\t80' lines -> {'Galaxy Buds2': 80}: one name per device, the lowest level."""
+    out = {}
+    for line in text.splitlines():
+        name, _, level = line.rpartition("\t")
+        if not name.strip() or not level.strip().isdigit():
+            continue
+        name = re.sub(r"\s+(?:hands-?free(?: ag)?(?: audio)?|avrcp transport|stereo|a2dp(?: snk)?|le|audio)$", "", name.strip(), flags=re.I)
+        out[name] = min(out.get(name, 100), int(level))
+    return out
+
+
+def bluetooth_battery(which=""):
+    """'earbuds battery': each connected Bluetooth device that reports one (most headphones and controllers do)."""
+    if CTX.dry:
+        return log("read the battery of connected Bluetooth devices")
+    r = _ps(_BT_BATTERY, timeout=20)
+    levels = bt_batteries(r.stdout if r else "")
+    if not levels:
+        ui.tell("No connected Bluetooth device reports its battery",
+                "None of your connected Bluetooth devices report a battery level")
+        return
+    ui.tell("  ·  ".join(f"{n} {v}%" for n, v in levels.items()),
+            ", ".join(f"{n} at {v} percent" for n, v in levels.items()))
+
+
 # ----------------------------------------------------------------- answers
 def clock():
     now = datetime.now()

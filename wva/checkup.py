@@ -148,6 +148,24 @@ def c_volume():
         raise
 
 
+def c_sound_devices():
+    from . import audio
+    try:
+        outs = audio.devices(audio.RENDER)
+    except Exception as e:
+        return WARN, f"Couldn't read the sound devices ({e}).", "Restart the PC if sound works but this stays."
+    if not outs:
+        return WARN, "No speakers or headphones plugged in.", "Plug them in (or turn them on), then check again."
+    try:
+        audio.app_routing_ok()
+        per_app = "“Spotify on the speakers” works here."
+    except Exception as e:
+        per_app = f"“Spotify on the speakers” won't work on this Windows ({e}): Settings → Sound → Volume mixer does it by hand."
+    names = ", ".join(n.split(" (")[0] for _, n, _ in outs)
+    return OK, f"{len(outs)} output{'s' if len(outs) != 1 else ''}: {names}. {per_app}", \
+        "" if len(outs) > 1 else "Only one output: plug in headphones to switch between them by voice."
+
+
 def c_media():
     from . import media
     if not media.AVAILABLE:
@@ -273,7 +291,8 @@ def c_admin():
 
 CHECKS = [("Speech model", c_speech), ("Speed", c_speed), ("Microphone", c_mic), ("Push-to-talk keys", c_hotkeys),
           ("Always listening", c_listen),
-          ("Every command routes", c_routing), ("Volume control", c_volume), ("Media controls (play/pause/what's playing)", c_media),
+          ("Every command routes", c_routing), ("Volume control", c_volume), ("Sound devices", c_sound_devices),
+          ("Media controls (play/pause/what's playing)", c_media),
           ("Spotify", c_spotify), ("Discord", c_discord), ("Stremio", c_stremio), ("Steam & Epic games", c_games),
           ("Clips & recording", c_clips), ("NVIDIA GPU info", c_gpu), ("Wi-Fi & Bluetooth switches", c_radios),
           ("Spoken answers", c_voice), ("Internet", c_internet), ("Updates", c_update), ("Start with Windows", c_startup),

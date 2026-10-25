@@ -109,6 +109,17 @@ every week or two.
   model or cloud). Commands stay English, but Hinglish works through the AI trick:
   `say: spotify kholo -> open spotify`.
 - **Stremio**: install the [Stremio app](https://www.stremio.com/downloads). Without it, movies open on web.stremio.com.
+- **Files by name** ("find the file budget", "open my chemistry assignment"): misspelled, shortened
+  or sound-alike names still work ("budjet", "assgnmt", "fizzics"). It looks in your own folders,
+  the files you opened lately (any drive) and Windows' search index. When a few fit about as well,
+  the pill lists them: say **"the second one"**. It remembers that pick next time.
+- **Headphones and speakers**: "switch to my headphones", "headphones volume 30", "list audio
+  devices" (then "the second one"), "which output am I using". **"Spotify on the speakers"**
+  sends just one app's sound to one device. That last one uses an undocumented part of Windows
+  (the one EarTrumpet uses), so a big Windows update may break it. The setup check says if it works.
+- **Bluetooth**: "connect my earbuds" opens Windows' Bluetooth list, and you tap the device (connecting
+  by voice alone isn't reliable on Windows). "Earbuds battery" reads the battery level of connected
+  headphones and controllers that report one.
 
 ## When something's off
 

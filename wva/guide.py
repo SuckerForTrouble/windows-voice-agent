@@ -23,6 +23,7 @@ GROUP_INFO = {
     "Gaming": ("🎮", "Clip it, record it, show FPS."),
     "Sound & media": ("🔊", "Volume, pause, next song."),
     "App volume": ("🎚️", "Just one app louder or quieter."),
+    "Sound devices": ("🎧", "Headphones or speakers, and which app plays where."),
     "Browser": ("🌐", "Tabs, scrolling, zoom."),
     "Keyboard": ("⌨️", "Type words, press keys."),
     "Windows": ("🖥️", "Snap, resize, minimise windows."),

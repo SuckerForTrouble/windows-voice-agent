@@ -4,7 +4,7 @@ import re
 
 from .engine import CTX
 
-handlers = {"notify": None, "speak": None, "osd_text": None}
+handlers = {"notify": None, "speak": None, "osd_text": None, "choose": None}
 
 
 def notify(msg):
@@ -15,6 +15,19 @@ def notify(msg):
     h = handlers["notify"]
     if h:
         h(msg)
+
+
+def choose(title, items, footer, seconds):
+    """A short numbered list on the pill ("Which one?"); items are (name, where) pairs."""
+    line = "  ".join(f"{i}. {name}" for i, (name, _) in enumerate(items, 1))
+    if CTX.dry:
+        CTX.log(f"  {title} {line}")
+        return
+    h = handlers["choose"]
+    if h:
+        h(title, items, footer, seconds)
+    else:
+        notify(f"{title} {line}")
 
 
 def speak(text):

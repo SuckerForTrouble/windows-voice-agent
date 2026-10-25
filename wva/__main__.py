@@ -4,6 +4,7 @@
    … --selftest out.json          build check: imports, routing, whisper (used by CI)
    … --dialog pick-key|api-key …  the tray's small windows"""
 import json
+import os
 import sys
 import time
 
@@ -118,6 +119,27 @@ def selftest(out, stt_model=None, wav=None):
         res["checkup"] = {r["name"]: f"{r['status']}: {r['detail']}" for r in checkup.run_all()}
     except Exception as e:  # noqa: BLE001
         res["checkup"] = f"{type(e).__name__}: {e}"
+    try:  # a shortcut Windows itself made reads back (the Recent list is read the same way)
+        import subprocess
+        import tempfile
+
+        from . import files
+        d = tempfile.mkdtemp()
+        target, lnk = os.path.join(d, "budget 2026 final.xlsx"), os.path.join(d, "budget.lnk")
+        open(target, "w").close()
+        subprocess.run(["powershell", "-NoProfile", "-Command", f"$s=(New-Object -ComObject WScript.Shell).CreateShortcut('{lnk}');"
+                        f"$s.TargetPath='{target}';$s.Save()"], capture_output=True, timeout=60, creationflags=0x08000000)
+        got = files.lnk_target(lnk)
+        res["shortcut"] = "ok" if got and os.path.normcase(got) == os.path.normcase(target) else f"read {got!r}"
+        res["recent_files"] = len(files.recent())
+    except Exception as e:  # noqa: BLE001
+        res["shortcut"] = f"{type(e).__name__}: {e}"
+    from . import audio
+    for name, probe in (("sound_devices", lambda: [n for _, n, _ in audio.devices()]), ("app_routing", audio.app_routing_ok)):
+        try:  # informational: GitHub's machines have no sound card
+            res[name] = probe()
+        except Exception as e:  # noqa: BLE001
+            res[name] = f"{type(e).__name__}: {e}"
     for backend in ("vulkan", "cpu"):
         for name in ("whisper-server", "parakeet-server"):
             res["whisper"][f"{backend}/{name}"] = "present" if (paths.WHISPER / backend / f"{name}.exe").exists() else "missing"
@@ -153,7 +175,8 @@ def selftest(out, stt_model=None, wav=None):
     with open(out, "w", encoding="utf-8") as f:
         json.dump(res, f, indent=2)
     ok = (all(v == "ok" for v in res["imports"].values()) and not bad and str(res["tray"]).startswith("ok")
-          and str(res.get("settings_window")).startswith("ok") and str(res.get("panel")).startswith("ok"))
+          and str(res.get("settings_window")).startswith("ok") and str(res.get("panel")).startswith("ok")
+          and res.get("shortcut") == "ok")
     return 0 if ok else 1
 
 
