@@ -129,7 +129,7 @@ class FakePC:
 
 def test_routing_on_a_real_pc():
     """What's installed mustn't change what a phrase means: every example routes the same on
-    a friend's PC (his setup check said 1 of 284 didn't: "show desktop" went to Vesktop)."""
+    a friend's PC (their setup check said 1 of 284 didn't: "show desktop" went to Vesktop)."""
     with FakePC():
         bad = []
         for case in CASES:
