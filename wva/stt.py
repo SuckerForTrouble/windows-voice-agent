@@ -33,12 +33,12 @@ def model_url(mid):
 # RAM on the CPU; on top of it whisper-server itself takes ~100 MB of RAM. Rough numbers:
 # the tray shows the real ones for the model in use.
 MODELS = {
-    "base.en-q5_1": ("Fast: least accurate", 60, False, 200, "quick"),
-    "small.en-q5_1": ("Balanced: good on weaker GPUs", 190, False, 400, "ok"),
-    "large-v3-turbo-q5_0": ("Best: most accurate, Hindi too", 550, True, 900, "slow"),
     # NVIDIA's Parakeet (through whisper.cpp): a tenth of a second per command even on a CPU.
     # English and 24 European languages, no Hindi; no prompt, so names lean on the ALIASES.
     PARAKEET: ("Parakeet: fastest, English", 669, False, 700, "quick"),  # 671 MB RAM measured on a CPU
+    "large-v3-turbo-q5_0": ("Best: most accurate, Hindi too", 550, True, 900, "slow"),
+    "small.en-q5_1": ("Balanced: good on weaker GPUs", 190, False, 400, "ok"),
+    "base.en-q5_1": ("Fast: least accurate", 60, False, 200, "quick"),
 }
 CLOUD = {  # OpenAI-style transcription APIs: id -> (label, endpoint, model)
     "groq": ("Cloud: Groq (needs an API key, sends your audio to Groq)",
@@ -70,6 +70,20 @@ def delete_unused():
     return freed // 1_000_000
 
 
+def speed_test(engine):
+    """Time the loaded model on the bundled sample sentence: (seconds, text) or None."""
+    import time
+    import wave
+    try:
+        with wave.open(str(paths.SAMPLE)) as w:
+            pcm = w.readframes(w.getnframes())
+    except OSError:
+        return None
+    t0 = time.time()
+    text = engine.transcribe(pcm)
+    return round(time.time() - t0, 2), text
+
+
 def make(on_progress=None):
     """The speech engine the settings ask for: a cloud API, Parakeet, or whisper-server here."""
     m = config.get("model")
@@ -97,8 +111,32 @@ def _multipart(fields, wav):
     return body, f"multipart/form-data; boundary={boundary}"
 
 
+# Whisper always encodes a 30 s window, even for a 2 s command. Telling it the real length
+# (audio_ctx, 50 per second) is ~3x faster, measured 2026-10-25 on 8 spoken commands:
+# Fast 0.53 -> 0.19 s, Best (CPU) 10.9 -> 3.5 s. Under ~10 s of window it started dropping
+# words ("Close Discord…" -> "close"), so that's the floor; Best then sometimes says a short
+# command twice ("Next song. Next song."), which _tidy folds back into one.
+TRIM_FLOOR = 512
+
+
+def audio_ctx(seconds):
+    if not config.get("whisper_trim") or seconds > 28:
+        return 0
+    return min(1500, max(TRIM_FLOOR, int((seconds + 1) * 50)))
+
+
+def _collapse(text):
+    """'Next song. Next song.' / 'Open YouTube, open YouTube,' -> said once."""
+    for sep in (r"(?<=[.?!])\s+", r",\s*"):
+        parts = [p for p in re.split(sep, text.strip()) if p.strip()]
+        keys = {re.sub(r"[^\w']+", " ", p).strip().lower() for p in parts}
+        if len(parts) > 1 and len(keys) == 1:
+            return parts[0].strip().rstrip(",")
+    return text
+
+
 def _tidy(text):
-    text = re.sub(r"\s+", " ", text or "").strip()
+    text = _collapse(re.sub(r"\s+", " ", text or "").strip())
     if PROMPT.lower() in text.lower():  # whisper sometimes repeats its prompt on silence
         return ""
     return "" if JUNK.match(text) else text
@@ -200,9 +238,10 @@ class Whisper:
         self._log = open(logf, "w", encoding="utf-8", errors="replace")
         log.info("starting %s", argv)
         self.proc = subprocess.Popen(argv, stdout=self._log, stderr=subprocess.STDOUT, stdin=subprocess.DEVNULL,
-                                     cwd=str(self._exe(backend).parent), creationflags=0x08000000)
-        from . import win
-        self._job = win.kill_with_me(self.proc)
+                                     cwd=str(self._exe(backend).parent), creationflags=0x08000000 if WINDOWS else 0)
+        if WINDOWS:
+            from . import win
+            self._job = win.kill_with_me(self.proc)
         deadline = time.time() + 180  # a big model on a slow disk takes a while
         while time.time() < deadline:
             if self.proc.poll() is not None:
@@ -247,6 +286,9 @@ class Whisper:
             return ""
         fields = {"temperature": "0.0", "temperature_inc": "0.2", "response_format": "json",
                   "language": language or config.get("language") or "en", "prompt": PROMPT}
+        ctx = audio_ctx(len(pcm) / 32000)
+        if ctx:
+            fields["audio_ctx"] = str(ctx)
         body, ctype = _multipart(fields, _wav(pcm))
         req = urllib.request.Request(f"http://127.0.0.1:{self.port}/inference", body, {"Content-Type": ctype})
         try:

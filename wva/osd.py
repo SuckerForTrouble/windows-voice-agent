@@ -1,5 +1,5 @@
 """The pill at the top of the screen: "Listening…", what was heard and what it did,
-answers and errors, in one of three styles (tray → Optional features → Pill style):
+answers and errors, in one of three styles (tray → Pill on screen, or Settings…):
 
   minimal   a slim pill: a dot and one short line (the default, the lightest)
   advanced  a card: title, what it heard, a chip per command, timing and model,

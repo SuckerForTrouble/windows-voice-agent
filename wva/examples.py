@@ -66,7 +66,8 @@ CASES = [
     ("mute discord audio", ["mute | unmute Discord sound"]),
     ("turn discord down", ["<app> volume <n> | up | down"]),
     # Stremio & watching
-    ("watch interstellar", ["watch <movie | show> on Stremio"]),
+    ("watch interstellar", ["watch <movie | show>"]),
+    ("watch interstellar on stremio", ["watch <movie | show> on Stremio"]),
     ("watch breaking bad season 2 episode 3 on stremio", ["watch <movie | show> on Stremio"]),
     ("stremio the dark knight", ["watch <movie | show> on Stremio"]),
     ("watch stranger things on netflix", ["watch <movie | show> on Netflix | Prime"]),

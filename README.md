@@ -26,10 +26,12 @@ your voice never leaves the computer.
 2. Run it. If Windows says **"Windows protected your PC"**, click **More info → Run anyway**.
    (The app isn't signed with a paid certificate; that's all the warning means.)
 3. Click **Install**. It starts by itself.
-4. The first start downloads the speech model (**about 550 MB**). A small bar at the top of
-   the screen shows how far along it is.
-5. Two pages open when it's ready:
-   - **Setup check**: everything with a ✗ or ! says exactly what to do.
+4. A **welcome window** opens: pick your talk key (a mouse side button works too), the speech
+   model (**Parakeet** is the fastest), the pill style and your music / movie / browser apps.
+   Or just click **Start**.
+5. It downloads the speech model you picked, once. A small bar at the top of the screen shows how far along it is.
+6. Two pages open when it's ready:
+   - **Setup check**: everything with a ✗ or ! says exactly what to do. It also times the model on your PC.
    - **Voice guide**: everything you can say, with examples.
 
 That's it. It starts with Windows and **updates itself**.
@@ -55,11 +57,14 @@ Everything else is off until you tick it.
 
 | Menu | What's there |
 |---|---|
-| **Push-to-talk keys** | Click one, press the key you want (F8, Pause, Ctrl+Alt+Space…), or pick a **mouse side button** (back / forward). Works straight away. |
-| **Speech model** | **Fast / Balanced / Best** (Whisper) and **Parakeet** (fastest: about a tenth of a second per command even without a GPU; English, no Hindi), each with its memory use and download size. The top line shows what the one in use *really* uses on your PC, and how long your last command took. Also **cloud** speech (Groq or OpenAI, your own API key, stored encrypted; your recordings go to them), and **Delete unused models**. |
+| **Settings…** | The same window as on the first start: talk keys (or a mouse side button), speech model, pill style, **your apps** (what "play …" uses: Spotify, YouTube Music or YouTube; what "watch …" uses: Stremio, Netflix or Prime Video; which browser "open browser" opens), always listening and its call word, and the extras. |
+| **Pause for now** | Keys and mic off until you untick it (a competitive game that wants F9, a meeting). |
+| **Always listening** | No key: say your **call word** first ("Jarvis, open Spotify"). The mic stays on, and anything that doesn't start with the call word is thrown away unseen (needs a model on your PC, not cloud). |
+| **Pill on screen** | Off, Minimal, Advanced (mic meter and timing) or Funky. |
+| **Speech model** | **Parakeet** (fastest: about a tenth of a second per command, even without a GPU; English) and **Best / Balanced / Fast** (Whisper; Best also does Hindi typing), each with its memory use and download size. The top line shows what the one in use *really* uses on your PC, and how long your last command took. Also **cloud** speech (Groq or OpenAI, your own API key, stored encrypted; your recordings go to them), and **Delete unused models**. |
 | **Microphone** | Pick which mic it listens to. |
-| **Optional features** | **Always listening**: no key, say your **call word** first ("Jarvis, open Spotify"); the mic stays on, and anything that doesn't start with the call word is thrown away unseen (needs a model on your PC, not cloud) · Spoken answers · the pill and its **style** (Minimal, Advanced with a mic meter and timing, or Funky) · beeps · how long each command took · **free the GPU while a game runs** (on: the model leaves graphics memory when a game starts, and loads back while you talk when you press the key) · typing language (**Hindi**) · Discord keybinds · clips with NVIDIA or Xbox. |
-| **Teach it my voice** | The AI trick below. |
+| **More options** | Push-to-talk keys, call word, typing language (**Hindi**), spoken answers, beeps, timing in the pill, **free the GPU while a game runs** (on: the model steps out of graphics memory while a game runs and loads back while you talk), Discord keybinds, clips with NVIDIA or Xbox, start with Windows, update by itself. |
+| **Help** | Check my setup, teach it your voice (the AI trick below), check for updates, logs. |
 
 Talk normally. "Can you open YouTube and search for lofi beats please" works. So does
 chaining: "new tab, type hello, press enter".
@@ -83,10 +88,10 @@ every week or two.
 - **Discord inside games**: Discord's shortcuts only work while Discord is in front, so the
   agent flicks to Discord and back, which can pull you out of a fullscreen game. Fix: Discord →
   Settings → Keybinds → add **Toggle Mute** = `Ctrl+Shift+Alt+M` and **Toggle Deafen** =
-  `Ctrl+Shift+Alt+D`, then tray → Optional features → tick **Discord keybinds**.
+  `Ctrl+Shift+Alt+D`, then tray → More options → tick **Discord keybinds**.
 - **"Clip that"**: turn on Instant Replay in the NVIDIA app (press `Alt+Z` → Instant Replay).
-  Using Xbox Game Bar instead? Tray → Optional features → Clips with → Xbox Game Bar.
-- **Typing in Hindi**: tray → Optional features → Typing language → Hindi (needs the **Best**
+  Using Xbox Game Bar instead? Tray → More options → Clips with → Xbox Game Bar.
+- **Typing in Hindi**: tray → More options → Typing language → Hindi (needs the **Best**
   model or cloud). Commands stay English, but Hinglish works through the AI trick:
   `say: spotify kholo -> open spotify`.
 - **Stremio**: install the [Stremio app](https://www.stremio.com/downloads). Without it, movies open on web.stremio.com.
@@ -105,8 +110,8 @@ every week or two.
   the agent. The setup check's **Speed** line shows how long commands take. Still slow?
   Tray → Speech model → **Parakeet** (the fastest), or **Balanced** / **Fast**.
 - **The first command in a game takes a few seconds**: that's the model loading back after it
-  stepped out of graphics memory for the game. Rather keep it loaded? Tray → Optional
-  features → untick "Free the GPU while a game runs".
+  stepped out of graphics memory for the game. Rather keep it loaded? Tray → More
+  options → untick "Free the GPU while a game runs".
 - **Antivirus complains**: apps built with Python sometimes get flagged by mistake. Allow it.
 - **Send a log to whoever gave you this**: tray → More → Open data folder → `logs`.
 
@@ -116,12 +121,11 @@ to remove them too.
 
 ## Coming later
 
-- 👋 **A welcome window on first start**: pick the speech model, keys, pill style and your default apps
 - 🎵 **Spotify plays the song itself**: without popping up (needs Spotify Premium and a one-time login)
-- 🪟 **A Windows 11-style settings panel**: toggle switches instead of the right-click menu
 - 🗣️ **Hindi voice commands**: say commands in Hindi, not just type in it
-- ⚡ **Faster answers**: tuned from your setup check's Speed line
+- ⚡ **More speed tuning**: from your setup check's Speed line
 - 💬 **Discord mute without switching to it**: for people using Vesktop or Equibop
+- 🪟 **A tray panel that opens on a click**: quick switches without the right-click menu
 
 ## Privacy
 

@@ -66,6 +66,31 @@ def spotify_search(query):
         apps.launch("url", "https://open.spotify.com/search/" + urllib.parse.quote(query))
 
 
+MUSIC_APPS = {"spotify": "Spotify", "youtube_music": "YouTube Music", "youtube": "YouTube"}
+MOVIE_APPS = {"stremio": "Stremio", "netflix": "Netflix", "prime": "Prime Video"}
+
+
+def play_music(query):
+    """'play blinding lights' with no app named: the music app picked in Settings."""
+    app = config.get("music_app")
+    if app == "youtube_music":
+        url = "https://music.youtube.com/search?q=" + urllib.parse.quote_plus(query)
+        return log(f"open {url}") if CTX.dry else apps.launch("url", url)
+    if app == "youtube":
+        from .actions import web
+        return web(query, "youtube")
+    return spotify_search(query)
+
+
+def watch(query):
+    """'watch interstellar' with no app named: the movie app picked in Settings."""
+    app = config.get("movie_app")
+    if app in ("netflix", "prime"):
+        from .actions import web
+        return web(query, {"prime": "prime video"}.get(app, app))
+    return stremio_find(query)
+
+
 def spotify_open(what):
     uri = {"liked": "spotify:collection:tracks", "library": "spotify:collection",
            "playlists": "spotify:collection:playlists", "podcasts": "spotify:collection:podcasts"}[what]

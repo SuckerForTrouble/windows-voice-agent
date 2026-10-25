@@ -1,7 +1,7 @@
 """The tray icon: its colour says what the agent is doing (grey loading, blue ready,
 red listening, amber thinking), and its menu holds every setting, so nobody has
 to edit a file. The default is the light one: push-to-talk, the pill, beeps.
-Everything else is in "Optional features" and off until you tick it."""
+Everything extra is off until you turn it on (tray, or Settings…)."""
 import os
 
 import pystray
@@ -102,35 +102,48 @@ class Tray:
         return [M(lambda i: f"Commands key: {hotkey.label(config.get('agent_key'))}   (change…)", lambda: self.app.change_key("agent")),
                 M(lambda i: f"Typing key: {hotkey.label(config.get('dictate_key'))}   (change…)", lambda: self.app.change_key("dictate"))]
 
-    def _optional(self):
+    def _pill_items(self):
+        M = pystray.MenuItem
+
+        def pick(style):
+            def fn(icon, item):
+                config.set("osd", style != "off")
+                if style != "off":
+                    config.set("osd_style", style)
+                    osd.show(f"Pill style: {osd.STYLES[style]}", "ok", 3)
+            return fn
+        return [M("Off", pick("off"), checked=lambda i: not config.get("osd"), radio=True)] + [
+            M(label, pick(sid), checked=lambda i, sid=sid: config.get("osd") and config.get("osd_style") == sid, radio=True)
+            for sid, label in osd.STYLES.items()]
+
+    def _more(self):
+        """The rarer options; the common ones are on the top level and in Settings…"""
         M, S = pystray.MenuItem, pystray.Menu.SEPARATOR
         lang = lambda v: self._set("dictate_language", v, self.app.check_language)  # noqa: E731
         clips = lambda v: self._set("clips", v)  # noqa: E731
         return pystray.Menu(
+            M("Push-to-talk keys", pystray.Menu(lambda: self._key_items())),
+            M(lambda i: f"Call word: “{config.get('call_word').title()}”   (change…)", lambda: self.app.change_call_word()),
+            M("Typing language", pystray.Menu(
+                M("English", lang("en"), checked=self._is("dictate_language", "en"), radio=True),
+                M("Hindi (needs the Best model or cloud)", lang("hi"), checked=self._is("dictate_language", "hi"), radio=True),
+                M("Detect it each time", lang("auto"), checked=self._is("dictate_language", "auto"), radio=True),
+            )),
+            S,
             M("Spoken answers (time, weather…)", self._toggle("voice_replies"), checked=self._checked("voice_replies")),
-            M("On-screen pill", self._toggle("osd"), checked=self._checked("osd")),
-            M("Pill style", pystray.Menu(*[
-                M(label, self._set("osd_style", sid, lambda sid=sid: osd.show(f"Pill style: {osd.STYLES[sid]}", "ok", 3)),
-                  checked=self._is("osd_style", sid), radio=True) for sid, label in osd.STYLES.items()])),
             M("Beeps", self._toggle("sounds"), checked=self._checked("sounds")),
             M("Show how long each command took", self._toggle("show_timing"), checked=self._checked("show_timing")),
-            M("Always listening: no key, say the call word first (the mic stays on)",
-              lambda: self.app.toggle_listen(), checked=self._checked("always_listen")),
-            M(lambda i: f"Call word: “{config.get('call_word').title()}”   (change…)", lambda: self.app.change_call_word()),
             M("Free the GPU while a game runs (not while always listening)",
               self._toggle("unload_in_games"), checked=self._checked("unload_in_games")),
-            S,
-            M("Typing language", pystray.Menu(
-                M("English", lang("en"), checked=lambda i: config.get("dictate_language") == "en", radio=True),
-                M("Hindi (needs the Best model or cloud)", lang("hi"),
-                  checked=lambda i: config.get("dictate_language") == "hi", radio=True),
-                M("Detect it each time", lang("auto"), checked=lambda i: config.get("dictate_language") == "auto", radio=True),
-            )),
             M("Discord keybinds (mute inside games)", self._toggle("discord_keybinds"), checked=self._checked("discord_keybinds")),
             M("Clips with", pystray.Menu(
-                M("NVIDIA app (Alt+F10)", clips("nvidia"), checked=lambda i: config.get("clips") == "nvidia", radio=True),
-                M("Xbox Game Bar (Win+Alt+G)", clips("xbox"), checked=lambda i: config.get("clips") == "xbox", radio=True),
+                M("NVIDIA app (Alt+F10)", clips("nvidia"), checked=self._is("clips", "nvidia"), radio=True),
+                M("Xbox Game Bar (Win+Alt+G)", clips("xbox"), checked=self._is("clips", "xbox"), radio=True),
             )),
+            S,
+            M("Start with Windows", lambda: self.app.set_startup(not config.get("start_with_windows")),
+              checked=self._checked("start_with_windows")),
+            M("Update by itself", self._toggle("auto_update"), checked=self._checked("auto_update")),
         )
 
     def _menu(self):
@@ -140,26 +153,28 @@ class Tray:
             M(lambda item: state.status, lambda: None, enabled=False),
             S,
             M("What can I say?", lambda: a.do("guide.open_guide"), default=True),
-            M("Check my setup", lambda: a.do("checkup.run_and_open")),
+            M("Settings…", lambda: a.open_settings()),
             S,
-            M("Push-to-talk keys", pystray.Menu(lambda: self._key_items())),
+            M("Pause for now (keys and mic off)", lambda: a.toggle_pause(), checked=lambda i: state.paused),
+            M(lambda i: f"Always listening for “{config.get('call_word').title()}”", lambda: a.toggle_listen(),
+              checked=self._checked("always_listen")),
+            M("Pill on screen", pystray.Menu(lambda: self._pill_items())),
             M("Speech model", pystray.Menu(lambda: self._model_items())),
             M("Microphone", pystray.Menu(lambda: self._mic_items())),
-            M("Optional features", self._optional()),
-            M("Teach it my voice", pystray.Menu(
-                M("1. Export my voice history for AI", lambda: a.do("tuning.export_for_ai")),
-                M("2. Import the AI's answer (copy it first)", lambda: a.do("tuning.import_from_clipboard")),
-                M("Open my tuning file", lambda: a.open_file(paths.TUNING)),
-                M("Clear my voice history", lambda: a.do("history.clear")),
-            )),
+            M("More options", self._more()),
             S,
-            M("Start with Windows", lambda: a.set_startup(not config.get("start_with_windows")),
-              checked=self._checked("start_with_windows")),
-            M("Update by itself", self._toggle("auto_update"), checked=self._checked("auto_update")),
-            M("Check for updates", lambda: a.check_updates(interactive=True)),
-            M("More", pystray.Menu(
-                M("Open the settings file", lambda: a.open_file(paths.CONFIG)),
+            M("Help", pystray.Menu(
+                M("Check my setup", lambda: a.do("checkup.run_and_open")),
+                M("Teach it my voice", pystray.Menu(
+                    M("1. Export my voice history for AI", lambda: a.do("tuning.export_for_ai")),
+                    M("2. Import the AI's answer (copy it first)", lambda: a.do("tuning.import_from_clipboard")),
+                    M("Open my tuning file", lambda: a.open_file(paths.TUNING)),
+                    M("Clear my voice history", lambda: a.do("history.clear")),
+                )),
+                M("Check for updates", lambda: a.check_updates(interactive=True)),
+                S,
                 M("Open data folder (logs, history)", lambda: os.startfile(str(paths.DATA))),
+                M("Open the settings file", lambda: a.open_file(paths.CONFIG)),
                 M("Restart", lambda: a.restart()),
             )),
             M("Quit", lambda: a.quit()),

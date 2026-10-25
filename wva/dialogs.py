@@ -154,4 +154,7 @@ def call_word(out, current):
 
 
 def run(kind, out, *args):
+    if kind == "settings":
+        from . import settings_window
+        return settings_window.run(out, *args)
     {"pick-key": pick_key, "api-key": api_key, "call-word": call_word}[kind](out, *args)

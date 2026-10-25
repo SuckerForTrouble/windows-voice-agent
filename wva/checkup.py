@@ -29,7 +29,7 @@ def c_speech():
             (FAIL, s.error, "Tray → Speech model → Set a cloud API key, or pick a model that runs on this PC.")
     if not s.ready and state.gaming and not s.error:
         return OK, f"Unloaded while {state.gaming} runs, to give it the graphics memory (loads back on the key)", \
-            "Prefer it loaded? Tray → Optional features → untick 'Free the GPU while a game runs'."
+            "Prefer it loaded? Tray → More options → untick 'Free the GPU while a game runs'."
     if s.error:
         return FAIL, s.error, "Restart the app from the tray. If it keeps failing, set the model to small.en-q5_1 (see FAQ in the README)."
     if not s.ready:
@@ -44,18 +44,30 @@ def c_speech():
 
 
 def c_speed():
+    """Times the model on the bundled sample sentence (no talking needed), plus your last commands."""
+    from . import stt
+    s = state.stt
+    if not s or not s.ready:
+        return WARN, "The speech model isn't loaded, so its speed can't be measured.", ""
+    test = stt.speed_test(s)
     t = state.timings
-    if not t:
-        return WARN, "No commands yet this session.", "Say a few commands, then run the check again to see the speed."
-    stt_avg = sum(x["stt"] for x in t) / len(t)
-    total_avg = sum(x["total"] for x in t) / len(t)
-    detail = f"Last {len(t)} commands: {stt_avg:.2f} s to turn speech into text, {total_avg:.2f} s from letting go to done"
-    if stt_avg > 1.5:
-        fix = ("It's running on the CPU: update the NVIDIA driver, then restart the agent." if state.stt and state.stt.backend == "cpu"
-               else "Try Parakeet, the fastest: tray → Speech model → Parakeet.")
-        return WARN, detail, fix
-    return OK, detail, ""
-
+    parts = []
+    if test:
+        parts.append(f"A 2.5 s sentence took {test[0]:.2f} s to turn into text")
+    if t:
+        parts.append(f"your last {len(t)} commands took {sum(x['total'] for x in t) / len(t):.2f} s from letting go to done")
+    detail = "; ".join(parts) or "No measurement"
+    slow = (test and test[0] > 1.0) or (t and sum(x["stt"] for x in t) / len(t) > 1.2)
+    if not slow:
+        return OK, detail, ""
+    if s.backend == "cpu":
+        fix = "It runs on the CPU: tray → Speech model → Parakeet (a tenth of a second even on a CPU), " \
+              "or update the NVIDIA driver so the GPU is used."
+    elif not str(s.model).startswith("parakeet"):
+        fix = "Try Parakeet, the fastest: tray → Speech model → Parakeet."
+    else:
+        fix = "Close other heavy apps, or update the NVIDIA driver."
+    return WARN, detail, fix
 
 def c_mic():
     import sounddevice as sd
@@ -99,7 +111,7 @@ def c_hotkeys():
 def c_listen():
     word = config.get("call_word").title()
     if not config.get("always_listen"):
-        return OK, "Off: push-to-talk only (tray → Optional features to turn it on)", ""
+        return OK, "Off: push-to-talk only (tray → Always listening to turn it on)", ""
     if state.listening:
         return OK, f"On: say “{word}” first. The mic stays on; anything else is thrown away unseen.", ""
     if state.stt and state.stt.backend == "cloud":

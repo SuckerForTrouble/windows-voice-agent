@@ -130,12 +130,14 @@ rule(SP, "what's playing on Spotify", "Song and artist from Spotify",
 rule(ST, "watch <movie | show> on Netflix | Prime", "Search there",
      [r"(?:watch|stream|find|search(?: for)?|look up|play) (.+?) on (netflix|prime video|amazon prime|prime|twitch)"],
      lambda q, svc: a.web(q, {"prime": "prime video", "amazon prime": "prime video"}.get(svc, svc)), wake=True, free=True)
-rule(ST, "watch <movie | show> on Stremio", "Opens its page in Stremio with the streams: 'watch interstellar', "
+rule(ST, "watch <movie | show> on Stremio", "Opens its page in Stremio with the streams: "
      "'stremio breaking bad season 2 episode 3'",
      [r"(?:watch|stream|play|find|search(?: for)?|look up|open|put on) (.+?) (?:on|in) stremio",
-      r"stremio (?:play |watch |search(?: for)? |find |open |look up )?(.+)",
-      r"(?:watch|stream) (?:the )?(?:movie |film |show |series )?(.+)"],
-     x.stremio_find, wake=True, free=True, guard=lambda q: not re.fullmatch(r"(?:it|this|that|something|a movie|a show)", q))
+      r"stremio (?:play |watch |search(?: for)? |find |open |look up )?(.+)"],
+     x.stremio_find, wake=True, free=True)
+rule(ST, "watch <movie | show>", "In your movie app (Stremio, Netflix or Prime Video: pick it in Settings)",
+     [r"(?:watch|stream) (?:the )?(?:movie |film |show |series )?(.+)"],
+     x.watch, wake=True, free=True, guard=lambda q: not re.fullmatch(r"(?:it|this|that|something|a movie|a show)", q))
 
 # Gaming ------------------------------------------------------------------------------
 rule(G, "clip that", "Saves the last moments: NVIDIA Instant Replay (Alt+F10) or Xbox Game Bar",
@@ -561,8 +563,8 @@ rule(A, "ask chatgpt | perplexity <question>", "Opens it with your question",
 rule(A, "google <text>", "Google search",
      [r"(?:google|ask google|search google for|search google|google search|google it) (.+)", r"(.+?) on google"],
      lambda q: a.web(q, "google"), wake=True, free=True, after=1.6)
-rule(A, "play <song | artist>", "No player named: Spotify's search for it",
-     [r"play (.+)", r"(?:listen to|i wanna hear|play me) (.+)"], x.spotify_search, wake=True, free=True, late=True,
+rule(A, "play <song | artist>", "In your music app (Spotify, YouTube Music or YouTube: pick it in Settings)",
+     [r"play (.+)", r"(?:listen to|i wanna hear|play me) (.+)"], x.play_music, wake=True, free=True, late=True,
      guard=lambda q: not re.fullmatch(r"(?:it|this|that|something|some music|music|the music|again|a song|songs)", q))
 rule(A, "search <text>", "Google (right after 'open stremio' / 'open youtube' it searches there)",
      [r"(?:search for|search the web for|search online for|search|look up|look for|find out|"

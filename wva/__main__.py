@@ -18,8 +18,9 @@ def _console():
 
 def try_phrase(text):
     from . import engine, rules  # noqa: F401
-    engine.CTX.dry, engine.CTX.raw = True, text
-    steps, _ = engine.plan(text, woke=True)
+    from .actions import streamline
+    engine.CTX.dry, engine.CTX.raw, engine.CTX.last_target = True, text, None
+    steps = streamline(engine.plan(text, woke=True)[0])
     if not steps:
         print("-> not a command")
     for r, groups, _ in steps:
@@ -75,6 +76,26 @@ def selftest(out, stt_model=None, wav=None):
         res["tray"] = f"ok: {walk(Tray(_App()).icon.menu)} items"
     except Exception as e:  # noqa: BLE001
         res["tray"] = f"{type(e).__name__}: {e}"
+    try:  # the welcome / Settings window builds (it's drawn, then closed straight away)
+        from . import config as _config
+        from .settings_window import Window
+        _config.load()
+        w = Window({k: _config.get(k) for k in ("agent_key", "dictate_key", "model", "always_listen", "call_word",
+                                                 "music_app", "movie_app", "browser", "voice_replies", "sounds",
+                                                 "start_with_windows", "unload_in_games", "auto_update",
+                                                 "dictate_language", "osd", "osd_style")}, True)
+        w.root.update()
+        n = [0]
+
+        def count(widget):
+            n[0] += 1
+            for child in widget.winfo_children():
+                count(child)
+        count(w.root)
+        w.root.destroy()
+        res["settings_window"] = f"ok: {n[0]} widgets"
+    except Exception as e:  # noqa: BLE001
+        res["settings_window"] = f"{type(e).__name__}: {e}"
     try:  # the setup check runs through (here without a mic or GPU, so some say so)
         from . import checkup
         res["checkup"] = {r["name"]: f"{r['status']}: {r['detail']}" for r in checkup.run_all()}
@@ -114,7 +135,8 @@ def selftest(out, stt_model=None, wav=None):
                 res["speech"][model] = {"heard": "", "error": engine_.error or "did not start"}
     with open(out, "w", encoding="utf-8") as f:
         json.dump(res, f, indent=2)
-    ok = all(v == "ok" for v in res["imports"].values()) and not bad and str(res["tray"]).startswith("ok")
+    ok = (all(v == "ok" for v in res["imports"].values()) and not bad and str(res["tray"]).startswith("ok")
+          and str(res.get("settings_window")).startswith("ok"))
     return 0 if ok else 1
 
 

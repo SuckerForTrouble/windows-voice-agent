@@ -108,7 +108,8 @@ jobs:
         shell: pwsh
         run: |
           pyinstaller --noconfirm --clean --windowed --name WindowsVoiceAgent --icon assets\icon.ico `
-            --collect-all winrt --collect-submodules pycaw --hidden-import pystray._win32 run_agent.py
+            --collect-all winrt --collect-submodules pycaw --hidden-import pystray._win32 `
+            --add-data "tests\data\open_spotify.wav;samples" run_agent.py
           Copy-Item -Recurse whisper-bin dist\WindowsVoiceAgent\whisper
           Copy-Item -Recurse helpers dist\WindowsVoiceAgent\helpers
           Get-ChildItem -Recurse dist\WindowsVoiceAgent\whisper | Select-Object FullName, Length
@@ -134,6 +135,7 @@ jobs:
           $r = Get-Content selftest.json | ConvertFrom-Json
           if ($p.ExitCode -ne 0) { Get-Content "$env:LOCALAPPDATA\WindowsVoiceAgent\logs\*" -ErrorAction SilentlyContinue; throw "self-test failed" }
           if ($r.helpers.'mouse-buttons' -eq "missing") { throw "mouse-buttons.exe is missing from the build" }
+          if (!(Test-Path dist\WindowsVoiceAgent\_internal\samples\open_spotify.wav)) { throw "the speed-test sample is missing from the build" }
           foreach ($m in $r.speech.PSObject.Properties) {
             if ($m.Value.heard -notmatch "spotify") { Get-Content "$env:LOCALAPPDATA\WindowsVoiceAgent\logs\*" -ErrorAction SilentlyContinue; throw "$($m.Name) heard: '$($m.Value.heard)' $($m.Value.error)" }
           }

@@ -26,6 +26,8 @@ MODELS = DATA / "models"
 LOGS = DATA / "logs"
 APPS_CACHE = DATA / "start-apps.json"
 GUIDE = DATA / "voice-guide.html"
+# The sample sentence the setup check times the speech model on ("Open Spotify and search for Interstellar")
+SAMPLE = (Path(getattr(sys, "_MEIPASS", "")) / "samples" if FROZEN else INSTALL / "tests" / "data") / "open_spotify.wav"
 WHISPER = INSTALL / "whisper"  # whisper/vulkan/whisper-server.exe, whisper/cpu/whisper-server.exe
 
 

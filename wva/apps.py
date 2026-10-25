@@ -333,6 +333,10 @@ def resolve(name):
     """Spoken name -> (kind, target, label) or None.
     kind: aumid | lnk | uri | url | exe | path"""
     n = strip_name(name)
+    if n in ("browser", "web browser", "internet"):  # the browser picked in Settings, if any
+        from . import config
+        if config.get("browser") and config.get("browser") in APPS:
+            n = config.get("browser")
     for cand in APPS.get(n, []):
         kind, _, target = cand.partition(":")
         if kind == "app":

@@ -10,6 +10,7 @@ DEFAULTS = {
     "agent_key": "f9",       # commands
     "dictate_key": "f10",    # types what you say into the focused app ("computer …" still runs commands)
     "model": "large-v3-turbo-q5_0",  # tray → Speech model: base.en-q5_1 | small.en-q5_1 | large-v3-turbo-q5_0 | groq | openai
+    "whisper_trim": True,    # tell Whisper the real length of the audio: ~3x faster (see stt.audio_ctx)
     "backend": "auto",       # auto (GPU via Vulkan, CPU if that fails) | vulkan | cpu
     "language": "en",        # what commands are spoken in (they're English phrases)
     "dictate_language": "en",  # what the typing key types: en | hi (Hindi) | auto
@@ -17,14 +18,19 @@ DEFAULTS = {
     "mic": "",               # part of the microphone's name; empty = the Windows default mic
     "sounds": True,          # start/stop beeps
     "osd": True,             # the little "heard: …" pill at the top of the screen
-    "osd_style": "minimal",  # minimal | advanced | funky (tray → Optional features → Pill style)
+    "osd_style": "minimal",  # minimal | advanced | funky (tray → Pill on screen)
     "voice_replies": False,  # answers (time, weather…) read out loud as well as shown (opt-in)
     "show_timing": False,    # the pill says how long each command took (opt-in)
     "always_listen": False,  # no key: the mic stays on and acts on phrases starting with the call word (opt-in)
     "call_word": "computer",
     "unload_in_games": True,  # a game starts: the speech model leaves graphics memory until you press the key
+    "welcome_done": False,   # the welcome window was shown (first start, or once after updating to it)
     "auto_update": True,
     "start_with_windows": True,
+    # Default apps (welcome window / Settings): what "play …", "watch …" and "open browser" use
+    "music_app": "spotify",  # spotify | youtube_music | youtube
+    "movie_app": "stremio",  # stremio | netflix | prime
+    "browser": "",           # empty = Windows' default browser, or chrome | edge | firefox | brave | opera
     "weather_place": "",     # empty = found by IP, or e.g. "Ludhiana"
     # Discord's own shortcuts only work while Discord is focused, so by default the agent
     # flicks to Discord and back. In a game that alt-tabs you out: set these in Discord

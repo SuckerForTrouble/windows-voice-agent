@@ -1,4 +1,4 @@
-"""Always listening (opt-in, tray → Optional features): no key needed, say the call word
+"""Always listening (opt-in, tray → Always listening): no key needed, say the call word
 first ("Jarvis, open Spotify").
 
 The mic stays open. A light voice detector (loudness against the room's own noise

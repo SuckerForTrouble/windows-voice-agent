@@ -154,6 +154,30 @@ def test_call_word():
     assert call_word_ok("play") and call_word_ok("bob") and call_word_ok("one two three four")
 
 
+def test_whisper_tidy():
+    """What the trimmed window made Best write (2026-10-25), and what must stay as it is."""
+    from wva import config, stt
+    config.load()
+    assert stt._tidy("Next song. Next song.") == "Next song."
+    assert stt._tidy("What's using my RAM? What's using my RAM?") == "What's using my RAM?"
+    assert stt._tidy("Open YouTube, open YouTube, Open YouTube,") == "Open YouTube"
+    assert stt._tidy("Open YouTube and search for lofi beats.") == "Open YouTube and search for lofi beats."
+    assert stt._tidy("New tab, type hello, press enter") == "New tab, type hello, press enter"
+    assert stt._tidy("Thank you.") == ""
+    assert stt.audio_ctx(2.5) == 512 and stt.audio_ctx(20) == 1050 and stt.audio_ctx(29) == 0
+    assert stt.paths.SAMPLE.exists(), "the setup check's sample sentence"
+
+
+def test_chain_shortcut():
+    """'open X and search Y' goes straight to X's search; other chains are left alone."""
+    from wva.actions import streamline
+    assert [r.say for r, _, _ in streamline(route("open youtube and search for lofi beats"))] == ["search <text>"]
+    assert engine.CTX.last_target == "youtube"
+    assert [r.say for r, _, _ in streamline(route("open stremio and search interstellar"))] == ["search <text>"]
+    assert len(streamline(route("New tab, type hello world, press enter"))) == 3
+    assert len(streamline(route("open notepad and type hello"))) == 2
+
+
 def test_stremio_parse():
     from wva.extras import parse_show
     assert parse_show("breaking bad season 2 episode 3") == ("breaking bad", 2, 3)

@@ -485,6 +485,23 @@ def web(query, engine=None):
     apps.launch("url", url)
 
 
+def streamline(steps):
+    """'open youtube and search lofi': the search opens YouTube's results by itself, so the
+    open (and the 1.6 s wait after it) is skipped; the search still knows where to look."""
+    from . import extras
+    out = []
+    for i, step in enumerate(steps):
+        r, groups, _ = step
+        nxt = steps[i + 1][0].fn if i + 1 < len(steps) else None
+        if r.fn is open_app and groups and nxt in (web, extras.spotify_search, extras.stremio_find):
+            target = apps.canonical(groups[0])
+            if target in SEARCH or target in ("stremio", "spotify"):
+                CTX.last_target = target
+                continue
+        out.append(step)
+    return out
+
+
 def windows_search(query):
     keys("win+s")
     if not CTX.dry:

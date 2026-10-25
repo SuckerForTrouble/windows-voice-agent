@@ -6,6 +6,7 @@ types what you say; "computer …" through it still runs a command.
 While a game runs the speech model can step out of graphics memory; the next
 key press loads it back while you talk."""
 import importlib
+import json
 import logging
 import logging.handlers
 import os
@@ -15,7 +16,7 @@ import sys
 import threading
 import time
 
-from . import (APP_ID, APP_NAME, __version__, apps, config, engine, history, hotkey, listen, osd, paths, speak, state,
+from . import (APP_ID, APP_NAME, __version__, actions, apps, config, engine, history, hotkey, listen, osd, paths, speak, state,
                system, tuning, ui, updater, usage, win)
 from . import rules  # noqa: F401  (registers the commands)
 from . import stt as speech
@@ -81,10 +82,14 @@ class App:
         log.info("tuning: %s word fixes, %s phrases", n_words, n_says)
         apps.warm_up()
         system.restore_timers()
+        if not config.get("welcome_done"):  # before the keys and the model: it picks both
+            self._welcome()
         self._register_keys()  # before the model: the keys work (and say "loading…") meanwhile
         threading.Thread(target=self._update_loop, daemon=True, name="updates").start()
         if self.first_run:
-            osd.show(f"{APP_NAME} is getting ready. The first start downloads the speech model (~550 MB).", "busy", 0)
+            mb = speech.MODELS.get(config.get("model"), ("", 0))[1]
+            osd.show(f"{APP_NAME} is getting ready" + (f": downloading the speech model ({mb} MB) once." if mb else "."),
+                     "busy", 0)
         if self._load() and self.first_run:
             time.sleep(1)
             self.do("checkup.run_and_open")
@@ -100,6 +105,74 @@ class App:
             if config.get("auto_update"):
                 self.check_updates()
             time.sleep(6 * 3600)
+
+    SETTINGS = ("agent_key", "dictate_key", "model", "always_listen", "call_word", "music_app", "movie_app", "browser",
+                "voice_replies", "sounds", "start_with_windows", "unload_in_games", "auto_update", "dictate_language",
+                "osd", "osd_style")
+
+    def _ask_settings(self, first_run):
+        import tempfile
+
+        from . import dialogs
+        cur = {k: config.get(k) for k in self.SETTINGS}
+        with tempfile.NamedTemporaryFile("w", suffix=".json", delete=False, encoding="utf-8") as f:
+            json.dump(cur, f)
+        try:
+            return dialogs.ask("settings", f.name, "1" if first_run else "0", timeout=3600)
+        finally:
+            os.unlink(f.name)
+
+    def _welcome(self):
+        """First start (and once after updating to this version): pick keys, model, apps…
+        before anything downloads. Closing it keeps the defaults."""
+        new = self._ask_settings(first_run=True)
+        for k, v in (new or {}).items():
+            if k in self.SETTINGS and k != "start_with_windows":
+                config.set(k, v)
+        if new and new.get("start_with_windows") != config.get("start_with_windows"):
+            self.set_startup(new["start_with_windows"])
+        config.set("welcome_done", True)
+        if new and new.get("model") != self.stt.model:  # made at start-up with the old choice
+            self.stt = speech.make(on_progress=self._progress)
+            state.stt = self.stt
+
+    def open_settings(self):
+        """Tray → Settings…: the same window; changes apply straight away."""
+        def go():
+            new = self._ask_settings(first_run=False)
+            if new:
+                self.apply_settings(new)
+        threading.Thread(target=go, daemon=True).start()
+
+    def apply_settings(self, new):
+        changed = {k: v for k, v in new.items() if k in self.SETTINGS and config.get(k) != v}
+        if not changed:
+            return
+        for mode in ("agent", "dictate"):  # keys: re-register, keep the old one if Windows says no
+            key = f"{mode}_key"
+            if key in changed:
+                old = config.get(key)
+                self.hotkeys.unregister(mode)
+                if self.hotkeys.register(mode, changed[key]):
+                    config.set(key, changed[key])
+                    state.hotkeys[mode] = True
+                else:
+                    state.hotkeys[mode] = self.hotkeys.register(mode, old)
+                    self.tray.notify(f"{hotkey.label(changed[key])} couldn't be used, kept {hotkey.label(old)}")
+        if "start_with_windows" in changed:
+            self.set_startup(changed["start_with_windows"])
+        for k, v in changed.items():
+            if k not in ("agent_key", "dictate_key", "start_with_windows", "model"):
+                config.set(k, v)
+        if "model" in changed:
+            self.set_model(changed["model"])  # downloads it if needed, then loads
+        elif "always_listen" in changed or "call_word" in changed:
+            if config.get("always_listen") and self.stt.backend == "cloud":
+                config.set("always_listen", False)
+                self.tray.notify("Always listening needs a speech model on this PC, not a cloud one.")
+            self._sync_listener()
+        self._ready_again()
+        osd.show("Settings saved", "ok", 2.5)
 
     def _register_keys(self):
         from .hotkey import Hotkeys
@@ -250,6 +323,8 @@ class App:
         return f"Ready: hold {key} and talk{call}" + (f" ({where})" if where else "")
 
     def _ready_again(self):
+        if state.paused:
+            return
         self.tray.set("ready", self._ready_text())
 
     def _engine_name(self):
@@ -308,7 +383,7 @@ class App:
     # ------------------------------------------------------------- always listening
     def _sync_listener(self):
         """Open or close the always-on mic to match the settings (and what the model allows)."""
-        want = config.get("always_listen") and self.stt.ready and self.stt.backend != "cloud"
+        want = config.get("always_listen") and self.stt.ready and self.stt.backend != "cloud" and not state.paused
         if want and not self.listener:
             lst = listen.Listener(self._phrase, paused=lambda: self.rec.active)
             try:
@@ -351,6 +426,25 @@ class App:
         log.info("call word, then: %r", rest)
         self.run_text(rest, woke=True, took=time.time() - heard_at)
 
+    def toggle_pause(self):
+        """Tray → Pause for now: the keys stop being ours and the always-on mic closes, until unticked
+        (a competitive game that wants F9, a meeting…). The model stays loaded, so resuming is instant."""
+        state.paused = not state.paused
+        if state.paused:
+            if self.rec.active:
+                self._cancel()
+            self.hotkeys.unregister_all()
+            if self.listener:
+                self.listener.stop()
+                self.listener = None
+            self.tray.set("loading", "Paused: tray → untick Pause to use it again")
+            osd.show("Paused: keys and mic off", "info", 2.5)
+        else:
+            for mode in ("agent", "dictate"):
+                state.hotkeys[mode] = self.hotkeys.register(mode, config.get(f"{mode}_key"))
+            self._sync_listener()
+            osd.show("Back on", "ok", 2)
+
     def toggle_listen(self):
         on = not config.get("always_listen")
         if on and self.stt.backend == "cloud":
@@ -390,6 +484,7 @@ class App:
     def run_text(self, text, woke=True, took=None):
         engine.CTX.raw, engine.CTX.last_target = text, None
         steps, woke = engine.plan(text, woke=woke)
+        steps = actions.streamline(steps)
         heard = re.sub(r"\s+", " ", text).strip()
         if not steps:
             history.record(via="agent", heard=heard, clean=engine.clean(text), result="unmatched")
