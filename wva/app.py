@@ -18,6 +18,7 @@ import time
 
 from . import (APP_ID, APP_NAME, __version__, actions, apps, config, engine, history, hotkey, listen, osd, paths, speak, state,
                system, tuning, ui, updater, usage, win)
+from . import choices, learn
 from . import rules  # noqa: F401  (registers the commands)
 from . import stt as speech
 from .recorder import Recorder
@@ -593,14 +594,35 @@ class App:
                     engine.CTX.raw = text
         heard = re.sub(r"\s+", " ", text).strip()
         source, via = ("Discord", "discord") if via == "discord" else (None, "agent")
+        guessed = None
+        if not steps and via != "discord":  # the nearest phrase that works: run it when sure, else ask
+            sure, options = learn.did_you_mean(text)
+            if sure:
+                log.info("did you mean: %r -> %r (close enough to run)", heard, sure)
+                engine.CTX.raw = guessed = sure
+                steps, woke = engine.plan(sure, woke=asked)
+                steps = actions.streamline(steps)
+            elif options:
+                log.info("did you mean: %r -> %s", heard, [p for p, _ in options])
+                history.record(via=via, heard=heard, clean=engine.clean(text), result="unmatched")
+                learn.note(text, False, via)
+                beep("error")
+                choices.offer("Did you mean?", [(p, what, p) for p, what in options],
+                              lambda p, said=text: learn.picked(said, p, lambda q: self.run_text(q, woke=True)),
+                              "Say “the first one”, “the second one”… or say it again")
+                return
         if not steps:
             history.record(via=via, heard=heard, clean=engine.clean(text), result="unmatched")
+            learn.note(text, False, via)
             beep("error")
             osd.show(heard, "error", 3.5, title="Didn't understand", footer="say “what can I say” for ideas", source=source)
             return
+        if not guessed:
+            learn.note(text, True, via)  # a retry that worked after a miss: maybe something to learn
         chips = [(s[:1].upper() + s[1:])[:40] for _, _, s in steps]
         footer = f"{took:.1f} s · {self._engine_name()}" if took is not None else self._engine_name()
-        osd.show(heard, "ok", 4 if source else 2.5, chips=chips, footer=footer, source=source)
+        osd.show(heard, "ok", 4 if source or guessed else 2.5, chips=chips, footer=footer, source=source,
+                 title=f"Took it as “{guessed}”" if guessed else None)
         errors = []
         for i, (r, groups, _) in enumerate(steps):
             try:

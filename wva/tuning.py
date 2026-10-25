@@ -112,8 +112,9 @@ def check(kind, left, right):
     return None
 
 
-def import_text(text):
-    """Add the good lines of an AI reply to tuning.txt. Returns (added, refused[(line, why)])."""
+def import_text(text, note="imported"):
+    """Add the good lines of an AI reply (or one learnt from a retry) to tuning.txt.
+    Returns (added, refused[(line, why)])."""
     have = {(k, l) for k, l, _ in parse("\n".join(_load_lines()))}
     block = re.search(r"BEGIN TUNING(.*?)END TUNING", text, re.S | re.I)
     added, refused = [], []
@@ -132,7 +133,7 @@ def import_text(text):
             lines = ["# Your fixes. 'heard: wrong -> right' fixes a word everywhere,",
                      "# 'say: what you said -> a command that works' maps a whole phrase.",
                      "# Delete a line to undo it. Lines starting with # are ignored.", ""]
-        lines += [f"# imported {datetime.now():%Y-%m-%d %H:%M}"] + added
+        lines += [f"# {note} {datetime.now():%Y-%m-%d %H:%M}"] + added
         paths.ensure()
         paths.TUNING.write_text("\n".join(lines) + "\n", encoding="utf-8")
         apply()

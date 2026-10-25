@@ -8,6 +8,7 @@ from . import audio as au
 from . import choices as ch
 from . import extras as x
 from . import files as fl
+from . import learn as le
 from . import phone as ph
 from . import system as s
 from . import engine
@@ -265,6 +266,13 @@ rule(H, "voice replies on | off", "Spoken answers; 'stop talking' / 'talk to me'
       r"(?:turn |switch )?(?:the )?(?:voice|spoken|talking) (?:replies|answers|responses|feedback) (on|off)",
       r"(?:stop|quit) (talking|speaking)(?: to me)?", r"be (quiet)", r"(?:start )?(talk|speak)(?:ing)? (?:to me|back|again|out loud)"],
      lambda st: s.voice_replies("off" if st in ("off", "talking", "speaking", "quiet") else "on"))
+rule(H, "forget that (what it just learned)", "Right after “Learned: …”: takes that fix back out",
+     [r"forget (?:that|it|what you (?:just )?learned|that fix)", r"unlearn (?:that|it)", r"(?:don't|do not) learn that"],
+     le.forget, wake=True, guard=lambda: le.recent())
+rule(H, "no, that's wrong", "Right after a command it got wrong: say it again and it learns what you meant",
+     [r"(?:no|nope|wrong)(?:,? (?:that's|that is|it's|that was) (?:wrong|not (?:it|right|what i (?:said|meant|wanted))))?",
+      r"(?:that's|that is|that was) (?:wrong|not (?:it|right|what i (?:said|meant|wanted)))", r"not that(?: one)?",
+      r"you (?:got it wrong|misheard me|heard me wrong)"], le.wrong, wake=True, guard=lambda: le.just_ran())
 rule(H, "never mind", "Do nothing (started talking by mistake)",
      [r"never ?mind(?: that)?", r"forget (?:it|that|about it)", r"cancel(?: that| it)?", r"ignore (?:that|it|me)",
       r"scratch that", r"nothing", r"no(?:thing)?,? never ?mind", r"oops"], s.never_mind, wake=True)

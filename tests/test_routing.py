@@ -64,7 +64,8 @@ def test_examples_run_dry():
 
 def test_every_rule_has_an_example():
     covered = {s for case in CASES for s in case[1]}
-    state_only = {"stop scrolling", "the second one"}  # need a doom scroll running / a list on the pill
+    state_only = {"stop scrolling", "the second one",  # need a doom scroll running / a list on the pill
+                  "forget that (what it just learned)"}  # needs a fix learnt a moment ago
     missing = [r.say for r in engine.RULES if r.say not in covered and r.desc and r.say not in state_only]
     assert not missing, f"rules without an example: {missing}"
 
@@ -139,6 +140,83 @@ def test_routing_on_a_real_pc():
         assert not bad, "\n".join(bad)
         from wva import actions
         assert actions.can_open("vesktop") and actions.can_open("counter strike") and actions.can_open("rainbow six siege")
+
+
+def test_near_names():
+    """Level 2: a name heard a little wrong still finds the app or game (only after exact names)."""
+    O = "open <app | game | site | folder | settings page>"
+    with FakePC():
+        from wva import apps
+        for said, want in [("open vesk top", "Vesktop"), ("launch dead lock", "Deadlock"), ("open stremmio", "Stremio"),
+                           ("open the calculater", "Calculator"), ("open phone lynk", "Phone Link"), ("open steem", "Steam"),
+                           ("open spotifye", "spotify")]:
+            steps = route(said)
+            assert [r.say for r, _, _ in steps] == [O], f"{said!r}: {[r.say for r, _, _ in steps]}"
+            assert apps.resolve(steps[0][1][0])[2] == want, f"{said!r} -> {apps.resolve(steps[0][1][0])}"
+        for said, want in [("close spottify", "close <app>"), ("mute spottify", "mute | unmute <app>"),
+                           ("switch to vesk top", "switch to <app>"), ("show desktop", "show desktop")]:
+            assert [r.say for r, _, _ in route(said)] == [want], said
+        for said in ("open desktop", "open chat", "open note"):  # not Vesktop, ChatGPT, Notepad
+            assert route(said) == [], said
+
+
+def test_did_you_mean():
+    from wva import learn
+    learn._clear()
+    assert learn.did_you_mean("opun spotify")[0] == "Open spotify"
+    assert learn.did_you_mean("skip this sung")[0] == "Skip this song"
+    sure, options = learn.did_you_mean("clothes the tap")
+    assert sure is None and options[0][0] == "Close this tab" and len({o[1] for o in options}) == len(options)
+    assert learn.did_you_mean("pause the musics")[1][0][0] == "Pause music"  # the example "Paws the music", cleaned up
+    assert learn.did_you_mean("the weather was nice yesterday at the beach") == (None, [])
+    known = ["shut down the computer", "sign out"]  # strict commands are offered, never run on a guess
+    assert learn.did_you_mean("shut dawn the computer", known)[0] is None
+
+
+def test_learning_from_retries():
+    from wva import learn, paths, tuning
+    learn._clear()
+    for f in (paths.TUNING, paths.DATA / "learning.json"):
+        f.unlink(missing_ok=True)
+    tuning.apply()
+    engine.CTX.log = lambda m: None
+    try:
+        assert route("open spotty") == []
+        learn.note("open spotty", False)
+        learn.note("open spotify", True)  # sounds alike: learnt the first time, as a word fix
+        assert "heard: spotty -> spotify" in paths.TUNING.read_text() and route("open spotty")
+        assert learn.recent() and [r.say for r, _, _ in route("forget that")] == ["forget that (what it just learned)"]
+        engine.CTX.dry = False
+        try:
+            learn.forget()  # takes it back out
+        finally:
+            engine.CTX.dry = True
+        assert "spotty" not in paths.TUNING.read_text() and route("open spotty") == []
+        assert [r.say for r, _, _ in route("forget that")] == ["never mind"]  # nothing learnt lately
+
+        assert route("halt the tunes") == []  # doesn't sound like what worked: learnt the second time
+        for _ in range(2):
+            learn.note("halt the tunes", False)
+            learn.note("pause music", True)
+        assert "say: halt the tunes -> pause music" in paths.TUNING.read_text()
+        assert [r.say for r, _, _ in route("halt the tunes")] == ["pause | play | stop music"]
+
+        learn.note("open steam", True)  # "no, that's wrong", "open stremio": a command that works isn't
+        learn.wrong()                   # remapped after one slip, and "steam" never becomes a word fix
+        learn._last["failed"], learn._last["failed_ran"] = "open steam", True
+        learn.note("open stremio", True)
+        assert "steam" not in paths.TUNING.read_text()
+        assert learn.line_for("open steam", "open stremio") == "say: open steam -> open stremio"
+
+        learn.note("blorp the zibber", False, via="discord")  # never from Discord's sound
+        learn.note("open discord", True, via="discord")
+        assert "blorp" not in paths.TUNING.read_text()
+    finally:
+        engine.CTX.log = print
+        for f in (paths.TUNING, paths.DATA / "learning.json"):
+            f.unlink(missing_ok=True)
+        tuning.apply()
+        learn._clear()
 
 
 def test_mishearings():

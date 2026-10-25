@@ -171,6 +171,8 @@ class Pill:
         text = m["text"]
         if m["kind"] == "ok" and m["chips"]:
             text = " → ".join(m["chips"]) if len(m["chips"]) > 1 else text
+        if m["kind"] == "ok" and m["title"]:  # "Took it as “open spotify”" (a guess): say what ran
+            text = m["title"]
         if m["kind"] == "error" and m["title"]:
             text = f"{m['title']}: “{text}”"
         return text if len(text) <= 80 else text[:78] + "…"

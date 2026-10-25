@@ -198,7 +198,7 @@ def find_target(name):
     if n == "file explorer":
         return Target("File Explorer", {"explorer.exe"}, how="explorer")
     if CTX.dry or not WINDOWS:
-        return None
+        return _near_target(n, [])
     key = apps.norm(n)
     if len(key) < 3:
         return None
@@ -219,7 +219,23 @@ def find_target(name):
     for g in apps.games():  # a game by its library name
         if g.get("dir") and (apps.norm(g["name"]) == key or (apps.norm(g["name"]).startswith(key + " ") and not CTX.strict)):
             return Target(g["name"], set(), how="gamedir:" + g["dir"].lower())
-    return None
+    return _near_target(n, ws)
+
+
+def _near_target(n, ws):
+    """'close spottify' / 'switch to vesk top': a known app or an open window's program by a
+    near name (only after exact names failed: engine.match)."""
+    if CTX.strict:
+        return None
+    by_app = {apps.norm(w.app): w for w in ws}
+    m = apps.near(n, list(apps.APP_PROCS) + list(apps.SPOKEN) + list(by_app))
+    if not m:
+        return None
+    m = apps.SPOKEN.get(m, m)
+    if m in apps.APP_PROCS:
+        return Target(m, apps.APP_PROCS[m])
+    w = by_app.get(apps.norm(m))
+    return Target(w.app, {w.exe.lower()}) if w else None
 
 
 def app_known(name):
@@ -228,7 +244,8 @@ def app_known(name):
     if n in WINDOW_WORDS:
         return False
     if CTX.dry or not WINDOWS:
-        return n in apps.APP_PROCS or n in ("browser", "game", "file explorer", "my game", "this game")
+        return n in apps.APP_PROCS or n in ("browser", "game", "file explorer", "my game", "this game") or \
+            _near_target(n, []) is not None
     return find_target(name) is not None
 
 
@@ -795,7 +812,9 @@ APP_SOUND = ("spotify", "discord", "chrome", "edge", "firefox", "brave", "opera"
 
 def sound_app(name):
     n = apps.canonical(re.sub(r"^(?:the|my) ", "", name.strip()))
-    return n if n in APP_SOUND else None
+    if n in APP_SOUND:
+        return n
+    return None if CTX.strict else apps.near(n, APP_SOUND)  # "mute spottify", after exact names failed
 
 
 def _sound_exes(n):

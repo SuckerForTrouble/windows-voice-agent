@@ -307,6 +307,8 @@ CASES = [
     ("check for updates", ["check for updates"]),
     ("stop talking", ["voice replies on | off"]),
     ("never mind", ["never mind"]),
+    ("no, that's wrong", ["no, that's wrong"]),
+    ("you misheard me", ["no, that's wrong"]),
     # not commands
     ("the quick brown fox jumps over the lazy dog", []),
     ("I think that's a great idea", []),

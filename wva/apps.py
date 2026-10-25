@@ -1,7 +1,6 @@
 """What "open X" / "close X" / "switch to X" can mean: apps from the Start menu (and
 Store apps), Steam and Epic games, websites, folders and Windows settings pages,
 plus which processes belong to an app so it can be closed even from the tray."""
-import difflib
 import json
 import os
 import re
@@ -182,6 +181,40 @@ def canonical(name):
     return SPOKEN.get(n, n)
 
 
+def near(said, names):
+    """The known name spoken words fit by sound or close spelling ("spotifye", "vesk top",
+    "dead lock", "stremmio"), or None. Every word of the name has to be heard and every word
+    heard has to be in the name (or all of it run together); a different first letter only
+    counts when it sounds the same, so "desktop" is never "Vesktop". Near names are only
+    tried after exact ones (engine.match)."""
+    from .files import sound, word_match
+    s = norm(said)
+    if len(s.replace(" ", "")) < 4:
+        return None
+
+    def sim(a, b):
+        if min(len(a), len(b)) < 0.75 * max(len(a), len(b)):
+            return 0.0  # "chat" isn't "chatgpt", "note" isn't "notepad"
+        v = word_match(a, b)
+        return v if a[:1] == b[:1] or sound(a) == sound(b) else min(v, 0.7)
+
+    def fit(name):
+        n = norm(name)
+        sw, nw = s.split(), n.split()
+        if not nw:
+            return 0.0
+        a, b = s.replace(" ", ""), n.replace(" ", "")
+        joined = sim(a, b) if min(len(a), len(b)) >= 0.85 * max(len(a), len(b)) else 0.0
+        words = min(min(max(sim(x, y) for y in nw) for x in sw), min(max(sim(x, y) for x in sw) for y in nw))
+        return max(joined, words)
+    scored = sorted(((fit(n), n) for n in set(names)), reverse=True)
+    if not scored or scored[0][0] < 0.8:
+        return None
+    if len(scored) > 1 and scored[1][0] > scored[0][0] - 0.04 and norm(scored[1][1]) != norm(scored[0][1]):
+        return None  # two fit about as well: don't guess
+    return scored[0][1]
+
+
 # ----------------------------------------------------------------- Start menu index
 _START = None
 _START_LOCK = threading.Lock()
@@ -286,11 +319,8 @@ def find_start_app(name):
                 best = (key, real)
     if best:
         return best[1]
-    if len(n) >= 5:
-        close = difflib.get_close_matches(n, by_norm, n=1, cutoff=0.85)
-        if close:
-            return by_norm[close[0]]
-    return None
+    close = near(n, by_norm) if len(n) >= 5 else None  # not difflib alone: "desktop" was 0.86 like "vesktop"
+    return by_norm[close] if close else None
 
 
 # ----------------------------------------------------------------- games
@@ -420,7 +450,19 @@ def resolve(name):
     if real:
         k, t = start_apps()[real]
         return k, t, real
+    if not CTX.strict and not _nearing:  # a name heard a little wrong: "open spotifye", "launch dead lock"
+        pool = list(APPS) + list(SITES) + (list(start_apps()) if WINDOWS else [])
+        other = near(n, pool)
+        if other and norm(other) != norm(n):
+            _nearing.append(n)
+            try:
+                return resolve(other)
+            finally:
+                _nearing.pop()
     return None
+
+
+_nearing = []  # resolve() asking itself about a near name: don't go round again
 
 
 def steam_folder(which):
