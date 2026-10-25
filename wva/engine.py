@@ -87,6 +87,7 @@ ALIASES = [
     (r"^((?:(?:hey|ok|okay) )?(?:computer,? )?(?:the |my )?)(?:rem|rahm|r a m|r e m)([.!?]?)$", r"\1ram\2"),
     (r"^closed (window|tab|it|this)\b", r"close \1"), (r"\bclose and close\b", "close"),
     (r"\bshut ?down\b", "shutdown"),
+    (r"\b(?:see|sea|si) drive\b", "c drive"), (r"\b(?:dee|d) drive\b", "d drive"), (r"\bapp ?data\b", "appdata"),
     (r"\bshuffled?\b(?= (?:the|my|this|music|songs|playlist|it|queue|on|off))|\bshovel\b(?= (?:the|my|music|songs))", "shuffle"),
     (r"\bv ?s code\b|\bvisual studio code\b", "vs code"),
     (r"\bo b s\b", "obs"),

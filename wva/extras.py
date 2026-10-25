@@ -10,7 +10,7 @@ import urllib.parse
 import urllib.request
 
 from . import apps, config, ui, win
-from .actions import CTX, app_windows, fg, fg_title_has, keys, log, open_app, type_text
+from .actions import CTX, WINDOWS, app_windows, fg, fg_title_has, keys, log, open_app, type_text
 from .engine import num
 
 
@@ -66,6 +66,26 @@ def spotify_search(query):
         apps.launch("url", "https://open.spotify.com/search/" + urllib.parse.quote(query))
 
 
+def spotify_play(query):
+    """'play blinding lights': Spotify's quick search (Ctrl+K), Enter plays the top result, then
+    straight back to the window you were in. Works on free accounts (no Premium, no developer
+    app): it's the shortcut Spotify itself suggests. Without the Spotify app: the web search."""
+    if CTX.dry:
+        return log(f"in spotify: ctrl+k, type {query!r}, enter (plays the top result), back to where you were")
+    r = apps.resolve("spotify")
+    if not r or r[0] == "url":
+        return spotify_search(query)
+
+    def pick():
+        time.sleep(0.5)                 # the quick search box opening
+        win.type_unicode(query)
+        time.sleep(1.3)                 # its results arriving
+        keys("enter")
+        time.sleep(0.3)
+    if not send_to_app("spotify", "ctrl+k", "Spotify", then=pick):
+        spotify_search(query)
+
+
 MUSIC_APPS = {"spotify": "Spotify", "youtube_music": "YouTube Music", "youtube": "YouTube"}
 MOVIE_APPS = {"stremio": "Stremio", "netflix": "Netflix", "prime": "Prime Video"}
 
@@ -79,7 +99,7 @@ def play_music(query):
     if app == "youtube":
         from .actions import web
         return web(query, "youtube")
-    return spotify_search(query)
+    return spotify_play(query)
 
 
 def watch(query):
@@ -119,16 +139,55 @@ def _discord_global(kind):
     keys(combo)
 
 
+# Which Discord is running decides how mute / deafen reach it without you switching to it:
+#   Equibop   has --toggle-mic / --toggle-deafen for the running copy (its docs list them for
+#             Linux; its code handles them on every system: checked 2026-10-25)
+#   Vesktop   has neither those nor global keybinds on Windows: only the flick to it and back
+#   Discord   (also with the Vencord or Equicord mods inside) has global keybinds: set them once
+#             and turn on "discord_keybinds", or it flicks to the window and back
+CLIENTS = {"equibop.exe": "Equibop", "vesktop.exe": "Vesktop", "discord.exe": "Discord",
+           "discordptb.exe": "Discord PTB", "discordcanary.exe": "Discord Canary"}
+
+
+def discord_client():
+    """(name, path of its .exe) of the Discord that's running, else (None, None)."""
+    if CTX.dry or not WINDOWS:
+        return None, None
+    import psutil
+    found = {}
+    for p in psutil.process_iter(["name", "exe"]):
+        try:
+            name = (p.info["name"] or "").lower()
+            if name in CLIENTS and name not in found:
+                found[name] = p.info["exe"]
+        except Exception:
+            continue
+    for name in CLIENTS:  # Equibop first: if it's running, it's the one with the mute command
+        if name in found:
+            return CLIENTS[name], found[name]
+    return None, None
+
+
+def _discord_toggle(kind):
+    """kind: mic | deafen."""
+    client, exe = discord_client()
+    if client == "Equibop" and exe:
+        import subprocess
+        subprocess.Popen([exe, f"--toggle-{kind}"], creationflags=0x08000000)  # tells the running copy
+        return
+    if config.get("discord_keybinds") and client != "Vesktop":
+        return _discord_global("mute" if kind == "mic" else "deafen")
+    if CTX.dry:
+        return log(f"{kind}: Equibop's --toggle-{kind}, else your Discord keybinds, else flick to Discord and back")
+    send_to_app("discord", "ctrl+shift+m" if kind == "mic" else "ctrl+shift+d", "Discord")
+
+
 def discord_mute():
-    if config.get("discord_keybinds"):
-        return _discord_global("mute")
-    send_to_app("discord", "ctrl+shift+m", "Discord")
+    _discord_toggle("mic")
 
 
 def discord_deafen():
-    if config.get("discord_keybinds"):
-        return _discord_global("deafen")
-    send_to_app("discord", "ctrl+shift+d", "Discord")
+    _discord_toggle("deafen")
 
 
 def discord_answer():

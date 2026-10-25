@@ -168,14 +168,26 @@ def c_spotify():
 
 
 def c_discord():
-    if not _installed("discord"):
-        return WARN, "Discord app not found.", "Install Discord for the Discord commands."
+    from .extras import discord_client
+    client, _ = discord_client()
+    keybinds = "Discord → Settings → Keybinds → add Toggle Mute = Ctrl+Shift+Alt+M and Toggle Deafen = " \
+               "Ctrl+Shift+Alt+D, then tray → More options → tick 'Discord keybinds'."
+    if client == "Equibop":
+        return OK, "Equibop is running: mute and deafen work without switching to it, even in games " \
+                   "(it takes a mute command from outside).", ""
+    if client == "Vesktop":
+        return WARN, "Vesktop is running: mute/deafen have to flick to it and back (Vesktop has no global keybinds " \
+                     "or mute command on Windows), which can pull you out of a fullscreen game.", \
+            "For in-game mute, use Equibop (a Vesktop fork that takes a mute command), or the official Discord app " \
+            "(with or without Vencord / Equicord) and its keybinds."
+    if not client and not _installed("discord"):
+        return WARN, "No Discord app found.", "Install Discord (or Vesktop / Equibop) for the Discord commands."
+    name = client or "Discord"
     if config.get("discord_keybinds"):
-        return OK, "Installed, using your global keybinds (works inside games)", \
-            "Make sure Discord → Settings → Keybinds has Toggle Mute = Ctrl+Shift+Alt+M and Toggle Deafen = Ctrl+Shift+Alt+D."
-    return WARN, "Installed. Mute/deafen flick to Discord and back (can kick you out of a fullscreen game).", \
-        "For in-game use: Discord → Settings → Keybinds → add Toggle Mute = Ctrl+Shift+Alt+M and Toggle Deafen = Ctrl+Shift+Alt+D, " \
-        "then tick 'Discord keybinds' in the tray menu."
+        return OK, f"{name} (also with Vencord or Equicord): using your global keybinds, works inside games", \
+            "Make sure the keybinds are set: " + keybinds
+    return WARN, f"{name} (also with Vencord or Equicord): mute/deafen flick to it and back, which can pull you out " \
+                 "of a fullscreen game.", "For in-game use: " + keybinds
 
 
 def c_stremio():

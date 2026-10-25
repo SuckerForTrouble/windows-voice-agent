@@ -65,6 +65,31 @@ APPS = {
     "desktop folder": ["folder:desktop"], "pictures": ["folder:pictures"], "pictures folder": ["folder:pictures"],
     "screenshots": ["folder:screenshots"], "screenshots folder": ["folder:screenshots"],
     "music folder": ["folder:music"], "videos": ["folder:videos"], "videos folder": ["folder:videos"],
+    # the deep ones nobody remembers the way to
+    "appdata": ["path:%APPDATA%"], "app data": ["path:%APPDATA%"], "roaming": ["path:%APPDATA%"],
+    "local appdata": ["path:%LOCALAPPDATA%"], "local app data": ["path:%LOCALAPPDATA%"],
+    "temp folder": ["path:%TEMP%"], "temp": ["path:%TEMP%"], "temporary files": ["path:%TEMP%"],
+    "program files": ["path:%ProgramFiles%"], "program files x86": ["path:%ProgramFiles(x86)%"],
+    "startup folder": ["path:shell:startup"], "fonts": ["path:shell:fonts"], "fonts folder": ["path:shell:fonts"],
+    "recent files": ["path:shell:recent"], "recent": ["path:shell:recent"], "send to folder": ["path:shell:sendto"],
+    "user folder": ["path:%USERPROFILE%"], "home folder": ["path:%USERPROFILE%"], "my folder": ["path:%USERPROFILE%"],
+    "onedrive": ["path:%OneDrive%"], "onedrive folder": ["path:%OneDrive%"],
+    "minecraft folder": ["path:%APPDATA%\\.minecraft"], "minecraft saves": ["path:%APPDATA%\\.minecraft\\saves"],
+    "clips": ["folder:captures"], "clips folder": ["folder:captures"], "captures": ["folder:captures"],
+    "game clips": ["folder:captures"], "steam games folder": ["steam:common"], "steam folder": ["steam:common"],
+    "steam screenshots": ["steam:screenshots"],
+    # Windows' own tools
+    "device manager": ["exe:devmgmt.msc"], "disk management": ["exe:diskmgmt.msc"], "services": ["exe:services.msc"],
+    "event viewer": ["exe:eventvwr.msc"], "task scheduler": ["exe:taskschd.msc"], "system information": ["exe:msinfo32.exe"],
+    "resource monitor": ["exe:resmon.exe"], "registry editor": ["exe:regedit.exe"], "regedit": ["exe:regedit.exe"],
+    "system properties": ["exe:sysdm.cpl"], "environment variables": ["cmd:rundll32.exe sysdm.cpl,EditEnvironmentVariables"],
+    "network connections": ["exe:ncpa.cpl"], "network adapters": ["exe:ncpa.cpl"], "sound devices": ["exe:mmsys.cpl"],
+    "sound control panel": ["exe:mmsys.cpl"], "power options": ["exe:powercfg.cpl"], "mouse properties": ["exe:main.cpl"],
+    "programs and features": ["exe:appwiz.cpl"], "uninstall a program": ["exe:appwiz.cpl"],
+    "on screen keyboard": ["exe:osk.exe"], "magnifier": ["exe:magnify.exe"], "character map": ["exe:charmap.exe"],
+    "directx diagnostic": ["exe:dxdiag.exe"], "dxdiag": ["exe:dxdiag.exe"], "disk cleanup": ["exe:cleanmgr.exe"],
+    "windows security": ["uri:windowsdefender:"], "virus scan": ["uri:windowsdefender:"], "defender": ["uri:windowsdefender:"],
+    "nvidia control panel": ["app:NVIDIA Control Panel"], "sticky notes": ["app:Sticky Notes"],
 }
 
 SITES = {
@@ -95,7 +120,7 @@ TLDS = "com|org|net|io|dev|in|co|app|ai|me|tv|gg|xyz|sh|so|to"
 
 # Which processes make up an app: for close / quit from the tray / switch to / app volume.
 APP_PROCS = {
-    "spotify": ["spotify.exe"], "discord": ["discord.exe", "discordptb.exe", "discordcanary.exe", "vesktop.exe"],
+    "spotify": ["spotify.exe"], "discord": ["discord.exe", "discordptb.exe", "discordcanary.exe", "vesktop.exe", "equibop.exe"],
     "chrome": ["chrome.exe"], "edge": ["msedge.exe"], "firefox": ["firefox.exe"], "brave": ["brave.exe"],
     "opera": ["opera.exe", "opera_gx.exe"], "zen": ["zen.exe"],
     "steam": ["steam.exe", "steamwebhelper.exe"], "epic": ["epicgameslauncher.exe", "epicwebhelper.exe"],
@@ -352,10 +377,19 @@ def resolve(name):
         elif kind == "url":
             return "url", target, n
         elif kind == "folder":
-            p = paths.user_folder("pictures") / "Screenshots" if target == "screenshots" else paths.user_folder(target)
+            p = {"screenshots": paths.user_folder("pictures") / "Screenshots",
+                 "captures": paths.user_folder("videos") / "Captures"}.get(target) or paths.user_folder(target)
             return "path", str(p), n
         elif kind == "path":
-            return "path", target, n
+            p = os.path.expandvars(target)
+            if p.startswith("shell:") or "%" not in p or not WINDOWS:  # (an unset variable: that folder doesn't exist)
+                return "path", p, n
+        elif kind == "cmd":
+            return "cmd", target, n
+        elif kind == "steam":
+            d = steam_folder(target)
+            if d:
+                return "path", d, n
     # An installed app beats our website for the same name: with the Instagram, Netflix or
     # ChatGPT app installed, "open instagram" opens the app (it opened instagram.com before).
     real = exact_start_app(n) if WINDOWS and n in SITES else None
@@ -364,6 +398,11 @@ def resolve(name):
         return k, t, real
     if n in SITES:
         return "url", SITES[n], n
+    m = re.fullmatch(r"(?:(?:the|my) )?([a-z]) drive|drive ([a-z])", n)  # 'c drive', 'drive d'
+    if m:
+        letter = (m.group(1) or m.group(2)).upper()
+        if not WINDOWS or os.path.exists(f"{letter}:\\"):
+            return "path", f"{letter}:\\", f"{letter}: drive"
     url = domain_url(n)
     if url:
         return "url", url, n
@@ -374,7 +413,25 @@ def resolve(name):
     return None
 
 
+def steam_folder(which):
+    """Steam's games folder (steamapps/common) or its screenshots folder (userdata/…/760)."""
+    try:
+        import winreg
+        with winreg.OpenKey(winreg.HKEY_CURRENT_USER, r"Software\Valve\Steam") as k:
+            steam = Path(winreg.QueryValueEx(k, "SteamPath")[0])
+    except Exception:
+        return None
+    if which == "common":
+        return str(steam / "steamapps" / "common")
+    shots = sorted(steam.glob("userdata/*/760/remote"), key=lambda p: p.stat().st_mtime, reverse=True)
+    return str(shots[0]) if shots else None
+
+
 def launch(kind, target):
+    if kind == "cmd":
+        import shlex
+        subprocess.Popen(shlex.split(target, posix=False), creationflags=0x08000000)
+        return
     if kind == "aumid":
         subprocess.Popen(["explorer.exe", f"shell:AppsFolder\\{target}"], creationflags=0x08000000)
     elif kind == "exe":

@@ -13,6 +13,7 @@ from .engine import CTX, RULES
 # icon, a few plain words (the guide is for skimming: say less)
 GROUP_INFO = {
     "Open & search": ("🚀", "Open any app, game or website. Search anything."),
+    "Files & folders": ("📁", "Your newest download, any file by name, deep folders."),
     "Close & switch apps": ("🪟", "Close apps, even the ones hiding behind your game."),
     "Spotify": ("🎵", "Control Spotify from anywhere."),
     "Discord": ("💬", "Mute, deafen, answer calls."),
@@ -31,10 +32,9 @@ GROUP_INFO = {
     "Voice agent": ("🧭", "Help, setup check, updates."),
 }
 # What's planned, shown folded at the bottom of the guide (keep README.md's list the same).
-ROADMAP = [('🎵', 'Spotify plays the song itself', 'without popping up (needs Spotify Premium and a one-time login)'),
+ROADMAP = [('🎵', 'Spotify without the one-second flick', 'playing a song silently needs Spotify Premium and a one-time login'),
            ('🗣️', 'Hindi voice commands', 'say commands in Hindi, not just type in it'),
-           ('⚡', 'More speed tuning', "from your setup check's Speed line"),
-           ('💬', 'Discord mute without switching to it', 'for people using Vesktop or Equibop')]
+           ('⚡', 'More speed tuning', "from your setup check's Speed line")]
 # The first things to try. Each one is checked by the tests (tests/test_routing.py).
 STARTERS = [("🎵", "Open Spotify"), ("🪟", "Close Discord"), ("🔊", "Volume 30"), ("🎬", "Watch Interstellar"),
             ("⏱️", "Set a 10 minute timer"), ("⏭️", "Next song"), ("📸", "Take a screenshot"), ("🕒", "What time is it")]
@@ -157,7 +157,7 @@ footer{color:var(--soft);font-size:13px;text-align:center;margin-top:30px}
 </div>
 
 <details class="more"><summary><span class="ic">🛠️</span><span class="nm">Setup tips</span><span class="ct">6 tips</span></summary>
-<div class="r"><div class="say">Mute me on Discord</div><div class="d">Inside a game: in Discord → Settings → Keybinds add Toggle Mute = <b>Ctrl+Shift+Alt+M</b> and Toggle Deafen = <b>Ctrl+Shift+Alt+D</b>. Then tray → More options → tick <b>Discord keybinds</b>.</div></div>
+<div class="r"><div class="say">Mute me on Discord</div><div class="d"><b>Equibop</b>: works inside games as it is. <b>Discord</b> (also with Vencord or Equicord): add the keybinds Toggle Mute = <b>Ctrl+Shift+Alt+M</b> and Toggle Deafen = <b>Ctrl+Shift+Alt+D</b> in Discord → Settings → Keybinds, then tray → More options → tick <b>Discord keybinds</b>. <b>Vesktop</b>: flicks to it and back (it has no mute command). The setup check says which one you have.</div></div>
 <div class="r"><div class="say">Clip that</div><div class="d">Turn on Instant Replay: press <b>Alt+Z</b> in the NVIDIA app. Xbox Game Bar instead? Tray → More options → Clips with.</div></div>
 <div class="r"><div class="say">Doesn't work in one game</div><div class="d">That game runs as admin. Right-click the Voice Agent shortcut → Run as administrator.</div></div>
 <div class="r"><div class="say">Jarvis, open Spotify</div><div class="d">No key at all: tray → Always listening (pick the call word in Settings…). The mic stays on; anything that doesn't start with the call word is thrown away unseen.</div></div>

@@ -828,12 +828,19 @@ def media(action, app=None):
 
 
 def seek(direction, amount="10", unit="second"):
-    secs = (num(amount) or 10) * (60 if unit.startswith("minute") else 1)
+    """'forward 25 seconds' / 'back 5' / 'skip ahead a minute'. YouTube in front: its own keys
+    (L / J = 10 s, arrows = 5 s), so 25 s is L L →. Otherwise Windows' media controls, and for
+    Spotify, which may not take that, its own seek keys (Shift+arrows, 5 s each)."""
+    secs = (num(amount or "10") or 10) * (60 if (unit or "").startswith("minute") else 1)
     back = direction not in ("forward", "ahead")
     if CTX.dry:
         return log(f"seek {'-' if back else '+'}{secs}s")
-    if fg_title_has("youtube"):  # YouTube: J / L = 10 s
-        keys("j" if back else "l", max(1, round(secs / 10)))
+    if fg_title_has("youtube"):
+        tens, fives = divmod(round(secs / 5) * 5, 10)
+        if tens:
+            keys("j" if back else "l", tens)
+        if fives or not tens:
+            keys("left" if back else "right")
         return
     m = _media()
     try:
@@ -841,6 +848,11 @@ def seek(direction, amount="10", unit="second"):
             return
     except Exception:
         pass
+    if _procs(set(apps.APP_PROCS["spotify"])):
+        from . import extras
+        extras.send_to_app("spotify", None, "Spotify",
+                           then=lambda: keys("shift+left" if back else "shift+right", max(1, round(secs / 5))))
+        return
     ui.notify("This player doesn't allow skipping from outside")
 
 

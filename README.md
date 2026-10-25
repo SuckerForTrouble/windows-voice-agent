@@ -91,10 +91,18 @@ every week or two.
 
 ## Some setup for the best experience
 
-- **Discord inside games**: Discord's shortcuts only work while Discord is in front, so the
-  agent flicks to Discord and back, which can pull you out of a fullscreen game. Fix: Discord →
-  Settings → Keybinds → add **Toggle Mute** = `Ctrl+Shift+Alt+M` and **Toggle Deafen** =
-  `Ctrl+Shift+Alt+D`, then tray → More options → tick **Discord keybinds**.
+- **Discord inside games** ("mute me on Discord", "deafen"): it depends which Discord you use.
+  The setup check tells you which one it found.
+  - **Equibop**: works straight away, even in games: it takes a mute command from outside.
+  - **Discord** (also with **Vencord** or **Equicord**): Discord → Settings → Keybinds → add
+    **Toggle Mute** = `Ctrl+Shift+Alt+M` and **Toggle Deafen** = `Ctrl+Shift+Alt+D`, then tray →
+    More options → tick **Discord keybinds**. Without that, the agent flicks to Discord and back,
+    which can pull you out of a fullscreen game.
+  - **Vesktop**: it can only flick to it and back (no global keybinds or mute command on Windows).
+    For in-game mute, Equibop is a Vesktop fork that has one.
+- **Spotify** (free accounts too): "play blinding lights" flicks to Spotify for a second, runs its
+  quick search (Ctrl+K) and plays the top result, then comes back. Pause / play / next / previous
+  go through Windows' media controls and never pop it up.
 - **"Clip that"**: turn on Instant Replay in the NVIDIA app (press `Alt+Z` → Instant Replay).
   Using Xbox Game Bar instead? Tray → More options → Clips with → Xbox Game Bar.
 - **Typing in Hindi**: tray → More options → Typing language → Hindi (needs the **Best**
@@ -127,10 +135,9 @@ to remove them too.
 
 ## Coming later
 
-- 🎵 **Spotify plays the song itself**: without popping up (needs Spotify Premium and a one-time login)
+- 🎵 **Spotify without the one-second flick**: playing a song silently needs Spotify Premium and a one-time login
 - 🗣️ **Hindi voice commands**: say commands in Hindi, not just type in it
 - ⚡ **More speed tuning**: from your setup check's Speed line
-- 💬 **Discord mute without switching to it**: for people using Vesktop or Equibop
 
 ## Privacy
 

@@ -114,6 +114,47 @@ def radio(what, state):
     os.startfile("ms-settings:bluetooth" if what == "bluetooth" else "ms-settings:network-wifi")
 
 
+def theme(mode):
+    """'dark mode' / 'light mode' for apps and Windows itself (the switch in Settings → Colours)."""
+    light = 1 if mode == "light" else 0
+    if CTX.dry:
+        return log(f"Windows theme: {mode}")
+    import ctypes
+    import winreg
+    with winreg.OpenKey(winreg.HKEY_CURRENT_USER, r"Software\Microsoft\Windows\CurrentVersion\Themes\Personalize", 0,
+                        winreg.KEY_SET_VALUE) as k:
+        winreg.SetValueEx(k, "AppsUseLightTheme", 0, winreg.REG_DWORD, light)
+        winreg.SetValueEx(k, "SystemUsesLightTheme", 0, winreg.REG_DWORD, light)
+    # tell open windows (Explorer, the taskbar, apps) to repaint in the new theme
+    ctypes.windll.user32.SendMessageTimeoutW(0xFFFF, 0x001A, 0, "ImmersiveColorSet", 0x2, 2000, None)
+    ui.notify(f"{mode.capitalize()} mode")
+
+
+def wifi_connect(name):
+    """'connect to wifi home5g': one of the networks Windows already knows (it has the password)."""
+    if CTX.dry:
+        return log(f"wifi: connect to the saved network like {name!r}")
+    r = run(["netsh", "wlan", "show", "profiles"], wait=True)
+    known = re.findall(r":\s*(.+?)\s*$", r.stdout if r else "", re.M)
+    known = [k for k in known if k and "profile" not in k.lower()]
+    import difflib
+    key = lambda x: re.sub(r"[^a-z0-9]", "", x.lower())  # noqa: E731
+    pick = next((k for k in known if key(k) == key(name)), None) or \
+        next(iter(difflib.get_close_matches(key(name), [key(k) for k in known], n=1, cutoff=0.6)), None)
+    if pick and pick not in known:
+        pick = next(k for k in known if key(k) == pick)
+    if not pick:
+        ui.notify(f"No saved Wi-Fi called “{name}”" + (f". Saved: {', '.join(known[:6])}" if known else ""))
+        return
+    r = run(["netsh", "wlan", "connect", f"name={pick}"], wait=True)
+    ui.notify(f"Connecting to {pick}" if r and r.returncode == 0 else f"Couldn't connect to {pick}")
+
+
+def wifi_disconnect():
+    run(["netsh", "wlan", "disconnect"])
+    ui.notify("Wi-Fi disconnected")
+
+
 # ----------------------------------------------------------------- answers
 def clock():
     now = datetime.now()

@@ -5,9 +5,11 @@ import re
 
 from . import actions as a
 from . import extras as x
+from . import files as fl
 from . import system as s
 from .engine import num, parse_duration, rule
 
+FO = "Files & folders"
 R, YT, DC, SP, ST, G, C = ("Reels & Shorts", "YouTube", "Discord", "Spotify", "Stremio & watching", "Gaming",
                           "Close & switch apps")
 H, B, K, W, S, AU, SY, I, T, A = ("Voice agent", "Browser", "Keyboard", "Windows", "Sound & media", "App volume",
@@ -101,9 +103,12 @@ rule(DC, "go to <server | channel | friend> on Discord", "Discord's quick switch
      x.discord_goto, wake=True, free=True)
 
 # Spotify -----------------------------------------------------------------------------
-rule(SP, "play <song | artist> on Spotify", "Opens Spotify's search for it (click the top result)",
-     [r"(?:play|search(?: for)?|find|look for|put on|listen to) (.+?) (?:on|in) spotify",
-      r"spotify (?:play|search(?: for)?|find) (.+)", r"search spotify for (.+)"],
+rule(SP, "play <song | artist> on Spotify", "Plays the top result (free accounts too), then back to what you were doing",
+     [r"(?:play|put on|listen to) (.+?) (?:on|in) spotify", r"spotify play (.+)"],
+     x.spotify_play, wake=True, free=True)
+rule(SP, "search <song | artist> on Spotify", "Opens Spotify's search results for it",
+     [r"(?:search(?: for)?|find|look for|look up) (.+?) (?:on|in) spotify", r"spotify (?:search(?: for)?|find) (.+)",
+      r"search spotify for (.+)"],
      x.spotify_search, wake=True, free=True)
 rule(SP, "pause | play | next on Spotify", "Spotify only, even when something else plays too",
      [r"(pause|play|resume|stop|next|previous|skip|continue)(?: the)?(?: song| track| music)?(?: on| in)? spotify",
@@ -395,10 +400,17 @@ rule(S, "next | previous track", "Skip track",
       r"go (back) (?:a|one) (?:song|track)", r"(?:go )?(back) to (?:the )?(?:previous|last) (?:song|track|item|one)",
       r"(?:replay|play) (?:the )?(previous|last)(?: (?:song|track|item|one))?(?: again)?"],
      lambda w: a.media("next" if w in ("next", "skip", "change", "switch") else "previous"))
-rule(S, "skip ahead | rewind <n> seconds", "In the video / song playing",
-     [r"(?:skip|jump|go|fast) (forward|ahead) (?:by )?(.+?) (seconds?|minutes?)", r"(rewind|back) (?:by )?(.+?) (seconds?|minutes?)",
-      r"(?:go|jump|skip) (back) (?:by )?(.+?) (seconds?|minutes?)"],
-     lambda d, n, u: a.seek("forward" if d in ("forward", "ahead") else "back", n, u), guard=lambda d, n, u: num(n) is not None)
+UNIT = r"(?: (seconds?|secs?|minutes?|mins?))?"
+rule(S, "skip ahead | rewind <n> seconds", "In the video or song playing: 'forward 30 seconds', 'back 5', 'skip ahead a minute'",
+     [rf"(?:skip|jump|go|fast|move|seek) ?(forward|ahead) (?:by )?(.+?){UNIT}", rf"(forward) (?:by )?(.+?){UNIT}",
+      rf"(skip) (?!to\b|the\b|this\b|that\b|it\b|song\b|track\b)(?:by )?(.+?){UNIT}",
+      rf"(rewind|back) (?:by )?(.+?){UNIT}", rf"(?:go|jump|skip|seek|move) (back|backwards?) (?:by )?(.+?){UNIT}"],
+     lambda d, n, u=None: a.seek("forward" if d in ("forward", "ahead", "skip") else "back", n, u),
+     guard=lambda d, n, u=None: num(n) is not None and 0 < num(n) <= 600)
+rule(S, "skip ahead | rewind (10 seconds)", "No number: ten seconds",
+     [r"(?:skip|jump|fast) (forward|ahead)(?: a (?:bit|little))?", r"(rewind)(?: (?:a (?:bit|little)|it|that))?",
+      r"(?:go|jump|skip) (back) a (?:bit|little)"],
+     lambda d: a.seek("forward" if d in ("forward", "ahead") else "back", "10"))
 rule(S, "what's playing", "Title and artist",
      [r"what(?:'s| is) (?:this )?(?:song|playing|this)", r"(?:which|what) song is (?:this|playing)", r"now playing",
       r"who (?:is )?sings? this"], a.now_playing)
@@ -450,6 +462,14 @@ rule(SY, "brightness up | down | <0-100>", "Laptop screens",
                             "down" if d in ("down", "dimmer", "darker", "decrease", "lower", "reduce") else d),
      guard=lambda d: d in ("up", "down", "brighter", "dimmer", "darker", "increase", "raise", "decrease", "lower", "reduce")
      or (num(d) if num(d) is not None else -1) in range(0, 101))
+rule(SY, "dark mode | light mode", "Windows and apps, like the switch in Settings → Colours",
+     [r"(?:turn on |switch to |use |go |enable )?(dark|light) (?:mode|theme)(?: on)?", r"(?:make (?:it|windows|everything) )?(dark|light)"],
+     lambda m: s.theme(m), guard=lambda m: True)
+rule(SY, "connect to wifi <name>", "One of the networks Windows already knows",
+     [r"connect (?:me )?to (?:the )?(?:wifi|wi-fi|network) (?:called |named )?(.+)", r"connect to (.+?) wifi",
+      r"(?:switch|change) (?:the )?wifi to (.+)"], lambda n: s.wifi_connect(n), wake=True, free=True)
+rule(SY, "disconnect wifi", "", [r"disconnect (?:from )?(?:the )?(?:wifi|wi-fi|network)", r"(?:leave|drop) (?:the )?(?:wifi|wi-fi)"],
+     s.wifi_disconnect, wake=True)
 rule(SY, "wifi | bluetooth on | off", "Windows' radio switches",
      [r"(?:turn |switch )?(on|off|enable|disable) (?:the )?(wifi|bluetooth)", r"(?:turn |switch )?(?:the )?(wifi|bluetooth) (on|off)"],
      lambda p, q: s.radio(*((q, p) if p in ("on", "off", "enable", "disable") else (p, q))))
@@ -536,6 +556,31 @@ rule(T, "pause | resume timer", "'pause the timer', 'resume my pizza timer'",
      [r"(pause|hold|freeze|resume|unpause|continue|restart|unfreeze) " + TSPEC],
      lambda verb, *sp: s.timer_pause(verb not in ("pause", "hold", "freeze"), *sp), wake=True)
 
+# Files & folders ---------------------------------------------------------------------
+LAST = r"(?:last|latest|newest|most recent|recent)"
+rule(FO, "open my last download | screenshot | clip", "The newest one: 'open my last download', 'open the latest screenshot'",
+     [rf"(?:open|play|show me|view) (?:my |the )?{LAST} (download|screenshot|clip|recording)s?",
+      r"open (?:what|the thing|the file) i (?:just )?(download)ed", rf"(?:open|play) (?:my |the )?{LAST} (?:game )?(clip)"],
+     lambda w: fl.latest(w))
+rule(FO, "show my last download in Explorer", "Opens its folder with the file selected",
+     [rf"(?:show|find|reveal|where(?:'s| is)) (?:my |the )?{LAST} (download|screenshot|clip|recording)(?: in (?:the )?(?:folder|explorer))?",
+      rf"(?:open|show) (?:the )?folder (?:of|with|for) (?:my |the )?{LAST} (download|screenshot|clip)"],
+     lambda w: fl.latest(w, reveal=True))
+rule(FO, "find the file <name>", "Searches your folders and opens the best match: 'find the file budget', 'open my resume file'",
+     [r"(?:find|open|search for|look for|get) (?:the |my |a )?file (?:called |named )?(.+)",
+      r"(?:find|open) (?:the |my )?(.+?) file", r"where(?:'s| is) (?:the |my )?file (?:called |named )?(.+)"],
+     lambda q: fl.open_found(q), wake=True, free=True,
+     guard=lambda q: q not in ("settings", "tuning", "the", "a", "this") and not a.can_open(q + " file"))
+rule(FO, "find the folder <name>", "Searches your folders and opens the best match",
+     [r"(?:find|open|search for|look for|go to) (?:the |my |a )?folder (?:called |named )?(.+)",
+      r"(?:find|open) (?:the |my )?(.+?) folder"],
+     lambda q: fl.open_found(q, dirs=True), wake=True, free=True,
+     guard=lambda q: q not in ("data", "settings") and not a.can_open(q) and not a.can_open(q + " folder"))
+rule(FO, "search my files for <text>", "Explorer's own search: everything Windows has indexed",
+     [r"search (?:my |all my |the )?(?:files|documents|folders|computer files) (?:for )?(.+)",
+      r"(?:find|search for|look for) (.+?) in my (?:files|documents|folders)"],
+     lambda q: fl.search_files(q), wake=True, free=True)
+
 # Open & search -----------------------------------------------------------------------
 rule(A, "open <app | game | site | folder | settings page>", "Anything in the Start menu, Steam/Epic games, sites, "
      "'downloads', 'sound settings', 'something dot com'",
@@ -563,7 +608,7 @@ rule(A, "ask chatgpt | perplexity <question>", "Opens it with your question",
 rule(A, "google <text>", "Google search",
      [r"(?:google|ask google|search google for|search google|google search|google it) (.+)", r"(.+?) on google"],
      lambda q: a.web(q, "google"), wake=True, free=True, after=1.6)
-rule(A, "play <song | artist>", "In your music app (Spotify, YouTube Music or YouTube: pick it in Settings)",
+rule(A, "play <song | artist>", "In your music app (Spotify plays the top result; or YouTube Music / YouTube: Settings)",
      [r"play (.+)", r"(?:listen to|i wanna hear|play me) (.+)"], x.play_music, wake=True, free=True, late=True,
      guard=lambda q: not re.fullmatch(r"(?:it|this|that|something|some music|music|the music|again|a song|songs)", q))
 rule(A, "search <text>", "Google (right after 'open stremio' / 'open youtube' it searches there)",
