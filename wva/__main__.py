@@ -130,7 +130,7 @@ def selftest(out, stt_model=None, wav=None):
         subprocess.run(["powershell", "-NoProfile", "-Command", f"$s=(New-Object -ComObject WScript.Shell).CreateShortcut('{lnk}');"
                         f"$s.TargetPath='{target}';$s.Save()"], capture_output=True, timeout=60, creationflags=0x08000000)
         got = files.lnk_target(lnk)
-        res["shortcut"] = "ok" if got and os.path.normcase(got) == os.path.normcase(target) else f"read {got!r}"
+        res["shortcut"] = "ok" if got and os.path.exists(got) and os.path.samefile(got, target) else f"read {got!r}"
         res["recent_files"] = len(files.recent())
     except Exception as e:  # noqa: BLE001
         res["shortcut"] = f"{type(e).__name__}: {e}"
