@@ -261,18 +261,50 @@ def device_like(text):
     return bool(ws) and len(ws) <= 4 and not SCREENS & set(ws) and any(w in DEVICE_WORDS or w in known for w in ws)
 
 
-def best(text, devs):
-    """The device a spoken name fits best (another one than the current on a tie), or None."""
+# Outputs nothing comes out of: they pass sound to another app (Steam Remote Play, VB-Cable…)
+VIRTUAL = re.compile(r"steam streaming|virtual|vb-audio|voicemeeter|cable (?:in|out)put|nvidia broadcast|oculus|"
+                     r"sonar|wave link|droidcam|iriun", re.I)
+
+
+def matches(text, devs):
+    """The devices a spoken name fits best, best first: [] when none fits. Several only when
+    they fit equally well and are all real ones ("speakers" with two real Speakers): a real
+    device beats a virtual one, and another one beats the one in use."""
     from .files import word_match, words
     said = _said(text)
 
     def fit(name):
         nw = words(name)
         toks = nw + [a + b for a, b in zip(nw, nw[1:])]
-        return sum(max(word_match(alt, t) * (1 if alt == w else sure) for alt, sure in {**SAME.get(w, {}), w: 1}.items()
-                       for t in toks) for w in said) / len(said)
-    ranked = sorted(((fit(n), not dflt, -i) for i, (_, n, dflt) in enumerate(devs)), reverse=True)
-    return devs[-ranked[0][2]] if ranked and ranked[0][0] >= 0.6 else None
+        return round(sum(max(word_match(alt, t) * (1 if alt == w else sure) for alt, sure in {**SAME.get(w, {}), w: 1}.items()
+                             for t in toks) for w in said) / len(said), 2)
+    ranked = sorted(((fit(n), not VIRTUAL.search(n), not dflt, -i) for i, (_, n, dflt) in enumerate(devs)), reverse=True)
+    if not ranked or ranked[0][0] < 0.6:
+        return []
+    top = [r for r in ranked if r[:2] == ranked[0][:2]]
+    if len(top) > 1 and any(not r[2] for r in top):  # several fit as well: the one in use isn't what you asked for
+        top = [r for r in top if r[2]]
+    return [devs[-r[3]] for r in top]
+
+
+def best(text, devs):
+    """The device a spoken name fits best, or None (see matches)."""
+    m = matches(text, devs)
+    return m[0] if m else None
+
+
+def labels(names):
+    """What to call each device: its short name ("Speakers"), with the part in brackets when
+    another one has the same short name ("Speakers (Realtek(R) Audio)")."""
+    from collections import Counter
+    short = [n.split(" (")[0] for n in names]
+    seen = Counter(short)
+    return [_short(n if seen[s] > 1 else s) for n, s in zip(names, short)]
+
+
+def label(name, devs):
+    names = [n for _, n, _ in devs]
+    return labels(names)[names.index(name)] if name in names else _short(name)
 
 
 def _short(name):
@@ -289,15 +321,29 @@ def switch(name, flow=RENDER):
         return CTX.log(f"  default {_flow_word(flow)} -> the one like {name!r}")
     try:
         devs = devices(flow)
-        dev = best(name, devs)
-        if not dev:
-            ui.notify(f"No {_flow_word(flow)} like “{name}”. You have: " + ", ".join(_short(n) for _, n, _ in devs))
+        found = matches(name, devs)
+        if not found:
+            ui.notify(f"No {_flow_word(flow)} like “{name}”. You have: " + ", ".join(labels([n for _, n, _ in devs])))
             return
+        if len(found) > 1:  # two real "Speakers": ask which
+            return _offer(found, flow, devs)
+        dev = found[0]
         set_default(dev[0])
     except Exception as e:
         ui.notify(f"Couldn't switch the {_flow_word(flow)}: {e}")
         return
-    ui.notify(f"{'Sound' if flow == RENDER else 'Mic'} → {_short(dev[1])}")
+    ui.notify(f"{'Sound' if flow == RENDER else 'Mic'} → {label(dev[1], devs)}")
+
+
+def _offer(devs_shown, flow, devs, title="Which one?"):
+    """A numbered list of devices on the pill; 'the second one' makes it the default."""
+    from . import choices
+
+    def use(dev):
+        set_default(dev[0])
+        ui.notify(f"{'Sound' if flow == RENDER else 'Mic'} → {label(dev[1], devs)}")
+    choices.offer(title, [(label(d[1], devs), "in use" if d[2] else "", d) for d in devs_shown], use,
+                  "Say “the second one” to switch")
 
 
 def switch_next():
@@ -316,14 +362,13 @@ def switch_next():
         return list_devices(RENDER)
     other = next(d for d in devs if not d[2])
     set_default(other[0])
-    ui.notify(f"Sound → {_short(other[1])}")
+    ui.notify(f"Sound → {label(other[1], devs)}")
 
 
 def list_devices(flow=RENDER):
     """'list audio devices': a numbered list; 'the second one' switches to it."""
     if CTX.dry:
         return CTX.log(f"  list the {_flow_word(flow)}s; picking one makes it the default")
-    from . import choices
     try:
         devs = devices(flow)
     except Exception as e:
@@ -332,13 +377,7 @@ def list_devices(flow=RENDER):
     if not devs:
         ui.notify("No speakers or headphones found" if flow == RENDER else "No microphone found")
         return
-
-    def use(dev):
-        set_default(dev[0])
-        ui.notify(f"{'Sound' if flow == RENDER else 'Mic'} → {_short(dev[1])}")
-    choices.offer("Sound outputs" if flow == RENDER else "Microphones",
-                  [(_short(dev[1]), "in use" if dev[2] else "", dev) for dev in devs], use,
-                  "Say “the second one” to switch")
+    _offer(devs, flow, devs, "Sound outputs" if flow == RENDER else "Microphones")
 
 
 def current():
@@ -346,8 +385,9 @@ def current():
     if CTX.dry:
         return CTX.log("  say the output and mic in use")
     try:
-        out = next((n for _, n, d in devices(RENDER) if d), None)
-        mic = next((n for _, n, d in devices(CAPTURE) if d), None)
+        outs, mics = devices(RENDER), devices(CAPTURE)
+        out = next((label(n, outs) for _, n, d in outs if d), None)
+        mic = next((label(n, mics) for _, n, d in mics if d), None)
         vol = get_volume() if out else None
     except Exception as e:
         ui.notify(f"Couldn't read the sound devices: {e}")
@@ -355,8 +395,8 @@ def current():
     if not out:
         ui.tell("No speakers or headphones found")
         return
-    ui.tell(f"Sound: {_short(out)} ({vol}%)" + (f"  ·  Mic: {_short(mic)}" if mic else ""),
-            f"Sound is on {out.split(' (')[0]}" + (f", the mic is {mic.split(' (')[0]}" if mic else ""))
+    ui.tell(f"Sound: {out} ({vol}%)" + (f"  ·  Mic: {mic}" if mic else ""),
+            f"Sound is on {out}" + (f", the mic is {mic}" if mic else ""))
 
 
 def _spec(spec):
@@ -381,7 +421,7 @@ def device_volume(name, spec):
             ev.SetMute(0, None)
     except Exception as e:
         return ui.notify(f"Couldn't change that volume: {e}")
-    ui.notify(f"{_short(dev[1])}: {round(new)}%")
+    ui.notify(f"{_short(dev[1])}: {round(new)}%")  # the full name: it may not be the one in use
 
 
 def device_mute(state, name):

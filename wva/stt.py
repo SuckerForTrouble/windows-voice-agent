@@ -70,18 +70,51 @@ def delete_unused():
     return freed // 1_000_000
 
 
-def speed_test(engine):
-    """Time the loaded model on the bundled sample sentence: (seconds, text) or None."""
-    import time
-    import wave
+def sample():
+    """The bundled sample sentence ("open Spotify", 2.5 s) as 16 kHz PCM, or b''."""
     try:
         with wave.open(str(paths.SAMPLE)) as w:
-            pcm = w.readframes(w.getnframes())
+            return w.readframes(w.getnframes())
     except OSError:
+        return b""
+
+
+def speed_test(engine, runs=3):
+    """The loaded model on the sample sentence, a few times. The first run can include the
+    GPU getting ready (building its programs, waking from sleep); the best one is what a
+    command costs. -> {"first", "best": seconds, "model_ms": the model's own time of the best
+    run (Parakeet says it; None for Whisper), "text", "backend", "device"} or None."""
+    pcm = sample()
+    if not pcm:
         return None
-    t0 = time.time()
-    text = engine.transcribe(pcm)
-    return round(time.time() - t0, 2), text
+    times, model_ms, text = [], [], ""
+    for _ in range(runs):
+        t0 = time.time()
+        text = engine.transcribe(pcm)
+        times.append(time.time() - t0)
+        model_ms.append(getattr(engine, "last_ms", None))
+    best = min(range(runs), key=times.__getitem__)
+    out = {"first": round(times[0], 2), "best": round(times[best], 2), "model_ms": model_ms[best], "text": text,
+           "backend": engine.backend, "device": engine.device}
+    log.info("speed test (%s, %s): %s s, the model's own ms %s, heard %r", engine.backend, engine.device or "-",
+             [round(t, 2) for t in times], model_ms, text)
+    return out
+
+
+def compare_backend(backend, runs=3):
+    """The same model on the other backend ('cpu' / 'vulkan'), started on the side just for
+    this: speed_test's result, or None if it didn't start. Takes the other one's memory
+    (Parakeet on the CPU: ~700 MB of RAM) for the few seconds it runs."""
+    m = config.get("model")
+    if m in CLOUD:
+        return None
+    eng = (Parakeet if m.startswith("parakeet") else Whisper)(force_backend=backend)
+    try:
+        if not eng.start() or eng.backend != backend:
+            return None
+        return speed_test(eng, runs)
+    finally:
+        eng.stop()
 
 
 def make(on_progress=None):
@@ -150,10 +183,17 @@ JUNK = re.compile(r"^\W*(?:\[[^\]]*\]|\([^)]*\)|thank you\.?|thanks for watching
 
 
 class Whisper:
-    def __init__(self, on_progress=None):
+    LOG = "whisper.log"
+
+    def __init__(self, on_progress=None, force_backend=None):
         self.model = config.get("model")
+        self.force_backend = force_backend  # the speed test's side run: this backend only
         self.backend = None      # "vulkan" | "cpu"
         self.device = ""         # the GPU name from whisper's log
+        self.devices = []        # every GPU Vulkan listed: [(index, name, integrated?)]
+        self.last_ms = None      # Parakeet: how long the model itself took for the last request
+        # the side run gets its own log, so the running model's log isn't overwritten
+        self.logname = f"{self.LOG.split('.')[0]}-{force_backend}-test.log" if force_backend else self.LOG
         self.ready = False
         self.error = ""
         self.progress = ""
@@ -211,7 +251,7 @@ class Whisper:
         paths.ensure()
         if not self.ensure_model():
             return False
-        want = config.get("backend")
+        want = self.force_backend or config.get("backend")
         order = {"vulkan": ["vulkan"], "cpu": ["cpu"]}.get(want, ["vulkan", "cpu"])
         for backend in order:
             if not self._exe(backend).exists():
@@ -228,6 +268,14 @@ class Whisper:
         self.error = self.error or "The speech model couldn't start (see logs/whisper.log)."
         return False
 
+    def _env(self):
+        """GGML_VK_VISIBLE_DEVICES when a GPU was picked by hand (config "gpu_device": its
+        index in the log's ggml_vulkan list; empty = Vulkan's own pick, the NVIDIA card)."""
+        env = dict(os.environ)
+        if str(config.get("gpu_device")).strip():
+            env["GGML_VK_VISIBLE_DEVICES"] = str(config.get("gpu_device")).strip()
+        return env
+
     def _launch(self, backend):
         s = socket.socket()
         s.bind(("127.0.0.1", 0))
@@ -236,10 +284,9 @@ class Whisper:
         threads = str(max(2, min(8, (os.cpu_count() or 4) // 2)))
         argv = [str(self._exe(backend)), "-m", str(self.model_path), "--host", "127.0.0.1", "--port", str(self.port),
                 "-t", threads, "-l", config.get("language") or "en", "-nt"]
-        logf = paths.LOGS / "whisper.log"
-        self._log = open(logf, "w", encoding="utf-8", errors="replace")
+        self._log = open(paths.LOGS / self.logname, "w", encoding="utf-8", errors="replace")
         log.info("starting %s", argv)
-        self.proc = subprocess.Popen(argv, stdout=self._log, stderr=subprocess.STDOUT, stdin=subprocess.DEVNULL,
+        self.proc = subprocess.Popen(argv, stdout=self._log, stderr=subprocess.STDOUT, stdin=subprocess.DEVNULL, env=self._env(),
                                      cwd=str(self._exe(backend).parent), creationflags=0x08000000 if WINDOWS else 0)
         if WINDOWS:
             from . import win
@@ -252,7 +299,7 @@ class Whisper:
             try:
                 with socket.create_connection(("127.0.0.1", self.port), timeout=0.5):
                     pass
-                self._read_device()
+                self._read_device(self.logname)
                 if backend == "vulkan" and not self.device:
                     log.info("vulkan build found no GPU, it runs on the CPU")
                 return True
@@ -262,16 +309,30 @@ class Whisper:
         return False
 
     def _warm_up(self):
-        """One throwaway run on near-silence: the GPU's first run is the slow one, so it
-        happens now and not on your first command."""
-        t0 = time.time()
-        self.transcribe(b"\x01\x00" * 16000)
-        log.info("warm-up took %.2fs", time.time() - t0)
+        """Throwaway runs before your first command. On the GPU, Vulkan builds its programs
+        for each new kind of work the first time it meets it, so 1 s of silence wasn't enough:
+        real speech (the decoder runs too) at three lengths covers what commands need. A
+        friend's first sentence took 4.2 s before this (setup check, 2026-10-25)."""
+        pcm = sample() if self.backend == "vulkan" else b""
+        clips = [pcm[:32000], pcm, pcm + pcm] if pcm else [b"\x01\x00" * 16000]
+        for clip in clips:
+            t0 = time.time()
+            self.transcribe(clip)
+            log.info("warm-up: %.1f s of audio took %.2f s (the model's own: %s ms)", len(clip) / 32000,
+                     time.time() - t0, self.last_ms)
 
-    def _read_device(self):
+    def _read_device(self, logname):
+        """Which GPU Vulkan picked, and every one it listed (in the log for the next setup check)."""
         try:
-            text = (paths.LOGS / "whisper.log").read_text(encoding="utf-8", errors="replace")
+            text = (paths.LOGS / logname).read_text(encoding="utf-8", errors="replace")
         except OSError:
+            return
+        found = re.findall(r"ggml_vulkan: (\d+) = (.+?) \((.*?)\) \| uma: (\d)", text)
+        self.devices = [(int(i), name.strip(), uma == "1") for i, name, _, uma in found]
+        if self.devices:
+            log.info("Vulkan GPUs: %s (the first is used; integrated ones marked)",
+                     "; ".join(f"{i} = {n}{' (integrated)' if u else ''}" for i, n, u in self.devices))
+            self.device = self.devices[0][1]
             return
         m = re.search(r"ggml_vulkan: \d+ = (.+?) \(", text) or re.search(r"using (?:Vulkan|CUDA)\d* backend.*?: (.+)", text)
         self.device = m.group(1).strip() if m else ""
@@ -320,9 +381,9 @@ class Parakeet(Whisper):
         argv = [str(self._exe(backend)), "-m", str(self.model_path), "-t", threads, "-v"]
         if backend == "cpu":
             argv.append("-ng")
-        self._log = open(paths.LOGS / self.LOG, "w", encoding="utf-8", errors="replace")
+        self._log = open(paths.LOGS / self.logname, "w", encoding="utf-8", errors="replace")
         log.info("starting %s", argv)
-        self.proc = subprocess.Popen(argv, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=self._log,
+        self.proc = subprocess.Popen(argv, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=self._log, env=self._env(),
                                      cwd=str(self._exe(backend).parent), creationflags=0x08000000 if WINDOWS else 0)
         if WINDOWS:
             from . import win
@@ -343,16 +404,9 @@ class Parakeet(Whisper):
             log.warning("parakeet-server (%s) didn't start: %r, exit %s", backend, first, self.proc.poll())
             self.stop()
             return False
-        self._read_device()
+        log.info("parakeet-server (%s): %s", backend, first[6:])
+        self._read_device(self.logname)
         return True
-
-    def _read_device(self):
-        try:
-            text = (paths.LOGS / self.LOG).read_text(encoding="utf-8", errors="replace")
-        except OSError:
-            return
-        m = re.search(r"ggml_vulkan: \d+ = (.+?) \(", text)
-        self.device = m.group(1).strip() if m else ""
 
     def transcribe(self, pcm, language=None):
         import queue
@@ -372,7 +426,8 @@ class Parakeet(Whisper):
                 return ""
         if line is None:
             return ""
-        _, _, text = line.partition("\t")
+        ms, _, text = line.partition("\t")
+        self.last_ms = int(ms) if ms.isdigit() else None
         return _tidy(text)
 
     def stop(self):

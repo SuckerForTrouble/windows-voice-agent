@@ -43,30 +43,62 @@ def c_speech():
     return OK, f"{s.model} on the GPU ({s.device or 'Vulkan'})" + (f" · {mem}" if mem else ""), ""
 
 
+SLOW = 0.8  # seconds for the 2.5 s sample sentence: slower than this, commands feel sluggish
+
+
+def _where(t):
+    return f"GPU ({t['device']})" if t["backend"] == "vulkan" and t["device"] else \
+        {"vulkan": "GPU", "cpu": "CPU"}.get(t["backend"], t["backend"] or "cloud")
+
+
 def c_speed():
-    """Times the model on the bundled sample sentence (no talking needed), plus your last commands."""
+    """Times the model on the bundled sample sentence a few times (no talking needed). When the
+    GPU is slow (or the CPU was picked by an earlier check), the other one is timed too and the
+    faster one is kept. Plus your last commands, and whether a pause before them made them slower."""
     from . import stt
     s = state.stt
     if not s or not s.ready:
         return WARN, "The speech model isn't loaded, so its speed can't be measured.", ""
-    test = stt.speed_test(s)
+    test = stt.speed_test(s, runs=1 if s.backend == "cloud" else 3)
+    if not test:
+        return WARN, "The sample sentence is missing from the install, so speed can't be measured.", "Reinstall the app."
+    parts = [f"{_where(test)}: a 2.5 s sentence takes {test['best']:.2f} s"]
+    if test["first"] > test["best"] + 0.5:
+        parts.append(f"the first try took {test['first']:.2f} s (the GPU getting ready, or waking up)")
+    if test["model_ms"] is not None and test["best"] - test["model_ms"] / 1000 > 0.3:
+        parts.append(f"the model itself needed {test['model_ms']} ms: the rest was waiting (always listening busy?)")
+    best = test
+    cheap = str(s.model).startswith("parakeet") or s.model in ("base.en-q5_1", "small.en-q5_1")
+    if cheap and ((s.backend == "vulkan" and test["best"] > SLOW) or (s.backend == "cpu" and config.get("backend_by_speed_test"))):
+        other = stt.compare_backend("cpu" if s.backend == "vulkan" else "vulkan")
+        if other:
+            parts.append(f"{_where(other)}: {other['best']:.2f} s")
+            if other["best"] < test["best"] * 0.7:
+                best = other
+                config.set("backend", "cpu" if other["backend"] == "cpu" else "auto")
+                config.set("backend_by_speed_test", other["backend"] == "cpu")
+                parts.append(f"switched to the {'CPU' if other['backend'] == 'cpu' else 'GPU'}, it's faster here")
+                if state.reload_stt:
+                    import threading
+                    threading.Thread(target=state.reload_stt, daemon=True).start()
     t = state.timings
-    parts = []
-    if test:
-        parts.append(f"A 2.5 s sentence took {test[0]:.2f} s to turn into text")
     if t:
         parts.append(f"your last {len(t)} commands took {sum(x['total'] for x in t) / len(t):.2f} s from letting go to done")
-    detail = "; ".join(parts) or "No measurement"
-    slow = (test and test[0] > 1.0) or (t and sum(x["stt"] for x in t) / len(t) > 1.2)
-    if not slow:
+        woke = [x for x in t if x.get("idle", 0) > 120]
+        if woke and len(woke) < len(t):
+            after, rest = sum(x["stt"] for x in woke) / len(woke), sum(x["stt"] for x in t if x not in woke) / (len(t) - len(woke))
+            if after > rest + 0.4:
+                parts.append(f"after a pause of 2+ minutes {after:.2f} s, otherwise {rest:.2f} s (the GPU waking from sleep)")
+    detail = "; ".join(parts)
+    if best["best"] <= SLOW:
         return OK, detail, ""
-    if s.backend == "cpu":
-        fix = "It runs on the CPU: tray → Speech model → Parakeet (a tenth of a second even on a CPU), " \
-              "or update the NVIDIA driver so the GPU is used."
-    elif not str(s.model).startswith("parakeet"):
+    if best["backend"] == "cpu" and not cheap:
+        fix = "It runs on the CPU: tray → Speech model → Parakeet (fast even on a CPU), or update the NVIDIA driver."
+    elif not cheap:
         fix = "Try Parakeet, the fastest: tray → Speech model → Parakeet."
     else:
-        fix = "Close other heavy apps, or update the NVIDIA driver."
+        fix = "Plug the laptop in (on battery the GPU slows right down), update the NVIDIA driver, and close heavy " \
+              "apps. Still slow? Send the logs folder (tray → Help → Open data folder): it lists the GPUs and timings."
     return WARN, detail, fix
 
 def c_mic():
@@ -166,7 +198,7 @@ def c_sound_devices():
         per_app = "“Spotify on the speakers” works here."
     except Exception as e:
         per_app = f"“Spotify on the speakers” won't work on this Windows ({e}): Settings → Sound → Volume mixer does it by hand."
-    names = ", ".join(n.split(" (")[0] for _, n, _ in outs)
+    names = ", ".join(audio.labels([n for _, n, _ in outs]))
     return OK, f"{len(outs)} output{'s' if len(outs) != 1 else ''}: {names}. {per_app}", \
         "" if len(outs) > 1 else "Only one output: plug in headphones to switch between them by voice."
 

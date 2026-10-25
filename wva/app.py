@@ -68,6 +68,7 @@ class App:
         self.follow = {"listen": 0.0, "discord": 0.0}  # after the call word alone: the next phrase is the command
         self.first_run = not paths.CONFIG.exists()
         osd.level_source = lambda: self.rec.level  # the pill's mic meter
+        state.reload_stt = self.reload_stt
 
     # ------------------------------------------------------------- start-up
     def start(self, icon):
@@ -185,6 +186,16 @@ class App:
                 msg = f"{hotkey.label(config.get(f'{mode}_key'))} is taken by another app: tray → Push-to-talk keys to pick another."
                 self.tray.notify(msg)
                 log.warning(msg)
+
+    def reload_stt(self):
+        """The speech model again with the current settings (the setup check found the other
+        backend faster)."""
+        with self.load_lock:
+            self.stt.stop()
+            self.stt = speech.make(on_progress=self._progress)
+            state.stt, state.usage = self.stt, {}
+        if self._load():
+            osd.show(f"Speech model now on the {'CPU' if self.stt.backend == 'cpu' else 'GPU'}: it's faster here", "ok", 4)
 
     def _load(self):
         """Start the speech model (download it first if needed). Safe to call from anywhere."""
@@ -361,9 +372,12 @@ class App:
                 while not self.stt.ready and not self.stt.error and time.time() - waited < 40:
                     time.sleep(0.05)  # loading back after a game: it was started on the key press
                 t0 = time.time()
+                idle = t0 - self.last_used if self.last_used else 0.0
                 text = self.stt.transcribe(pcm, language=self._language(mode))
                 heard_in = time.time() - t0
-                log.info("heard (%s, %.2fs audio, %.2fs to text): %r", mode, secs, heard_in, text)
+                model_ms = getattr(self.stt, "last_ms", None)
+                log.info("heard (%s, %.2fs audio, %.2fs to text, the model's own %s ms, idle %.0fs before): %r",
+                         mode, secs, heard_in, model_ms, idle, text)
                 if not text:
                     osd.show("Didn't catch that", "info", 2)
                 elif mode == "dictate" and not re.match(engine.WAKE, engine.clean(text)):
@@ -373,7 +387,7 @@ class App:
                     self.run_text(text, woke=mode == "agent", took=time.time() - released)
                 total = time.time() - released
                 state.timings = (state.timings + [{"stt": round(heard_in, 2), "total": round(total, 2),
-                                                   "audio": round(secs, 1)}])[-20:]
+                                                   "audio": round(secs, 1), "idle": round(idle), "model_ms": model_ms}])[-20:]
                 log.info("timing: %.2fs to text, %.2fs from key release to done", heard_in, total)
             except Exception as e:
                 log.exception("job failed")

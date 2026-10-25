@@ -363,6 +363,17 @@ def test_sound_devices():
                        ("galaxy buds", "d"), ("my earbuds", "d"), ("laptop", "a"), ("toaster", None)]:
         got = audio.best(said, devs)
         assert (got[0] if got else None) == want, f"{said!r}: want {want}, got {got}"
+    # a friend's laptop: three "Speakers", two of them Steam's virtual ones (nothing comes out of those)
+    devs = [("h", "Headphones (Realtek(R) Audio)", False), ("s", "Speakers (Realtek(R) Audio)", False),
+            ("v1", "Speakers (Steam Streaming Speakers)", False), ("v2", "Speakers (Steam Streaming Microphone)", True)]
+    assert audio.best("the speakers", devs)[0] == "s" and audio.best("steam streaming speakers", devs)[0] == "v1"
+    assert audio.labels([n for _, n, _ in devs]) == ["Headphones", "Speakers (Realtek(R) Audio)",
+                                                    "Speakers (Steam Streaming Speakers)", "Speakers (Steam Streaming Microphone)"]
+    assert audio.label("Headphones (Realtek(R) Audio)", devs) == "Headphones"
+    two = [("a", "Speakers (Realtek(R) Audio)", False), ("b", "Speakers (USB Audio DAC)", False), ("c", "Headphones (X)", True)]
+    assert [d[0] for d in audio.matches("speakers", two)] == ["a", "b"]  # two real ones: it asks which
+    assert [d[0] for d in audio.matches("the dac speakers", two)] == ["b"]
+    assert [d[0] for d in audio.matches("speakers", [two[0], ("b", "Speakers (USB Audio DAC)", True)])] == ["a"]
     assert audio.device_like("my headphones") and audio.device_like("the tv")
     assert not audio.device_like("the second monitor") and not audio.device_like("chrome")
     lines = "Galaxy Buds2 Hands-Free AG\t80\nGalaxy Buds2 Avrcp Transport\t85\nXbox Wireless Controller\t40\nnoise\t\n"

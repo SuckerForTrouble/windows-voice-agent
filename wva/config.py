@@ -12,6 +12,8 @@ DEFAULTS = {
     "model": "large-v3-turbo-q5_0",  # tray → Speech model: base.en-q5_1 | small.en-q5_1 | large-v3-turbo-q5_0 | groq | openai
     "whisper_trim": True,    # tell Whisper the real length of the audio: ~3x faster (see stt.audio_ctx)
     "backend": "auto",       # auto (GPU via Vulkan, CPU if that fails) | vulkan | cpu
+    "backend_by_speed_test": False,  # the setup check found the CPU faster here and switched to it
+    "gpu_device": "",        # empty = Vulkan's pick; or its number in logs (ggml_vulkan: N = …)
     "language": "en",        # what commands are spoken in (they're English phrases)
     "dictate_language": "en",  # what the typing key types: en | hi (Hindi) | auto
     "cloud_keys": {},        # API keys for the cloud models, encrypted for this Windows user
