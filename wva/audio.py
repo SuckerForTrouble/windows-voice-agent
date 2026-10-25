@@ -254,9 +254,11 @@ def _known_words():
 
 
 def device_like(text):
-    """Does this name a sound output? ("headphones", "the tv", "my hyperx")"""
+    """Does this name a sound output? ("headphones", "the tv", "my hyperx"). This PC's own
+    device names ("hyperx", "steam streaming…") count only after the strict pass (engine.match)."""
     ws = _said(text or "")
-    return bool(ws) and len(ws) <= 4 and not SCREENS & set(ws) and any(w in DEVICE_WORDS or w in _known_words() for w in ws)
+    known = set() if CTX.strict else _known_words()
+    return bool(ws) and len(ws) <= 4 and not SCREENS & set(ws) and any(w in DEVICE_WORDS or w in known for w in ws)
 
 
 def best(text, devs):

@@ -273,6 +273,9 @@ def find_start_app(name):
         return None
     if n in by_norm:
         return by_norm[n]
+    nospace = n.replace(" ", "")
+    if CTX.strict:  # matching a command: only the name as it is ("vs code" = "VSCode")
+        return next((real for key, real in by_norm.items() if key.replace(" ", "") == nospace), None)
     words = n.split()
     best = None
     for key, real in by_norm.items():

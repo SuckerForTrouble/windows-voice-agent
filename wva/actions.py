@@ -205,10 +205,11 @@ def find_target(name):
     ws, procs = scan()
     for w in ws:  # by program name: "notion" -> Notion.exe
         a = apps.norm(w.app)
-        if a == key or a.replace(" ", "") == key.replace(" ", "") or (len(key) >= 4 and a.startswith(key)):
+        if a == key or a.replace(" ", "") == key.replace(" ", "") or (len(key) >= 4 and a.startswith(key) and not CTX.strict):
             return Target(w.app, {w.exe.lower()})
     words = key.split()
-    for w in ws:  # by window title: "youtube" -> the browser window showing YouTube
+    for w in ([] if CTX.strict else ws):  # by window title: "youtube" -> the browser showing YouTube (not while
+        # matching strictly: a tab called "Desktop wallpapers" mustn't make "show desktop" switch to the browser)
         tw = apps.norm(w.title).split()
         if all(x in tw for x in words):
             return Target(n, {w.exe.lower()}, how="title", hwnd=w.hwnd)
@@ -216,7 +217,7 @@ def find_target(name):
         if nm.endswith(".exe") and nm not in apps.PROTECTED and apps.norm(nm[:-4]).replace(" ", "") == key.replace(" ", ""):
             return Target(nm[:-4], {nm})
     for g in apps.games():  # a game by its library name
-        if g.get("dir") and (apps.norm(g["name"]) == key or apps.norm(g["name"]).startswith(key + " ")):
+        if g.get("dir") and (apps.norm(g["name"]) == key or (apps.norm(g["name"]).startswith(key + " ") and not CTX.strict)):
             return Target(g["name"], set(), how="gamedir:" + g["dir"].lower())
     return None
 

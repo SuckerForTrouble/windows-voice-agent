@@ -25,6 +25,7 @@ class Ctx:
     last_target = None   # what the previous step of a chain opened ("stremio", "spotify", …)
     log = print          # where dry-run lines go
     front = ""           # dry runs: pretend this window title is in front ("instagram", "youtube")
+    strict = False       # while matching: names only as they are (see match())
     browser = None       # "brave, search cats": pages open in this browser (set by the "in <browser>" step)
     browser_fresh = False  # that browser was started just now (it already shows a new tab)
 
@@ -270,18 +271,30 @@ def natural(part):
 
 def match(t):
     """First rule whose pattern fully matches t (guard permitting): (rule, groups) or None.
-    Catch-all (late) rules come after all the others, in their own order."""
-    for r in [r for r in RULES if not r.late] + [r for r in RULES if r.late]:
-        for p in r.pats:
-            mm = p.fullmatch(t)
-            if not mm:
-                continue
-            groups = tuple(g for g in mm.groups() if g is not None) if r.fn.__code__.co_argcount != len(mm.groups()) else mm.groups()
-            try:
-                if r.guard is None or r.guard(*groups):
-                    return r, groups
-            except (TypeError, ValueError):
-                continue
+    Catch-all (late) rules come after all the others, in their own order.
+
+    Two passes. First names count only as they are (CTX.strict: exact app and game names,
+    the usual device words); only if nothing fits are near names allowed (close spellings,
+    window titles, this PC's device names). So what's installed can't take a phrase that is
+    a command as it stands: with Vesktop installed, "show desktop" sounded enough like
+    "show vesktop" to switch to it (a friend's setup check, 2026-10-25)."""
+    order = [r for r in RULES if not r.late] + [r for r in RULES if r.late]
+    for strict in (True, False):
+        CTX.strict = strict
+        try:
+            for r in order:
+                for p in r.pats:
+                    mm = p.fullmatch(t)
+                    if not mm:
+                        continue
+                    groups = tuple(g for g in mm.groups() if g is not None) if r.fn.__code__.co_argcount != len(mm.groups()) else mm.groups()
+                    try:
+                        if r.guard is None or r.guard(*groups):
+                            return r, groups
+                    except (TypeError, ValueError):
+                        continue
+        finally:
+            CTX.strict = False
     return None
 
 

@@ -123,18 +123,23 @@ def c_listen():
 def c_routing():
     from .examples import CASES
     from .engine import plan
+    import logging
     was = CTX.dry
     CTX.dry = True
-    bad = 0
+    bad = []
     try:
         for case in CASES:
             CTX.front = case[2] if len(case) > 2 else ""
-            if [r.say for r, _, _ in plan(case[0], woke=True)[0]] != case[1]:
-                bad += 1
+            got = [r.say for r, _, _ in plan(case[0], woke=True)[0]]
+            if got != case[1]:
+                bad.append(f"“{case[0]}” → {' + '.join(got) or 'nothing'}")
     finally:
         CTX.dry, CTX.front = was, ""
     if bad:
-        return FAIL, f"{bad} of {len(CASES)} example phrases don't route.", "Check for updates (tray). Your tuning file may also clash: tray → Open my tuning file."
+        logging.getLogger("wva.checkup").warning("phrases that don't route here: %s", bad)
+        return FAIL, f"{len(bad)} of {len(CASES)} example phrases don't route here: " + "; ".join(bad[:4]) + \
+            ("…" if len(bad) > 4 else ""), "Check for updates (tray). Your tuning file may also clash: tray → Open my " \
+            "tuning file. Otherwise send this page to whoever gave you the app: an installed app's name may be in the way."
     return OK, f"All {len(CASES)} example phrases reach their command", ""
 
 

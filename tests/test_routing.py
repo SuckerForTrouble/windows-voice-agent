@@ -81,6 +81,66 @@ def test_tuning_lines():
         engine.TUNE_SAY.clear()
 
 
+class FakePC:
+    """A real friend's PC (setup check, 2026-10-25), for routing that depends on what's
+    installed: Start menu apps (Vesktop!), Steam games, sound outputs. Linux paths and
+    drives are faked so only the routing is tested."""
+    GAMES = ["Counter-Strike", "Counter-Strike: Condition Zero", "Deadlock", "Half-Life", "The Last Caretaker",
+             "Tom Clancy's Rainbow Six Siege"]
+    START = ["Steam", "Vesktop", "Stremio", "Microsoft Edge", "Google Chrome", "Settings", "File Explorer", "Calculator",
+             "Camera", "Clock", "Copilot", "Microsoft Store", "Photos", "Snipping Tool", "Terminal", "Notepad", "Paint",
+             "Phone Link", "Xbox", "Game Bar", "Microsoft Teams", "Outlook", "OneDrive", "Weather", "Sticky Notes",
+             "Windows Security", "Get Help", "Tips", "Media Player", "Sound Recorder", "Feedback Hub", "WhatsApp",
+             "AMD Software: Adrenalin Edition", "Realtek Audio Console", "Armoury Crate", "NVIDIA Control Panel",
+             "Epic Games Launcher", "Ubisoft Connect", "Task Manager", "Control Panel", "Command Prompt",
+             "Remote Desktop Connection", "Quick Assist", "Steam Support Center", "Registry Editor", "WordPad", "Maps"]
+    OUTPUTS = ["Headphones (Realtek(R) Audio)", "Speakers (Realtek(R) Audio)", "Speakers (Steam Streaming Speakers)",
+               "Speakers (Steam Streaming Microphone)"]
+
+    def __enter__(self):
+        from wva import apps, audio
+        from wva.files import words
+        import ntpath
+        self.saved = (apps.WINDOWS, apps._START, apps._GAMES, apps._protocol_registered, audio._known_words,
+                      apps.os.path.exists, apps.os.path.expandvars, dict(os.environ))
+        apps.os.path.expandvars = ntpath.expandvars  # %APPDATA%
+        apps.WINDOWS = True
+        apps._START = {n: ("lnk", f"C:/{n}.lnk") for n in self.START}
+        apps._START.update({g: ("uri", f"steam://rungameid/{i}") for i, g in enumerate(self.GAMES)})
+        apps._GAMES = [{"name": g, "uri": "steam://x", "dir": f"c:/steam/common/{g}"} for g in self.GAMES]
+        apps._protocol_registered = lambda uri: uri.split(":")[0] in (
+            "steam", "stremio", "ms-settings", "ms-windows-store", "ms-photos", "ms-clock", "ms-screenclip", "ms-gamebar",
+            "microsoft.windows.camera", "xbox", "windowsdefender", "com.epicgames.launcher")
+        audio._known_words = lambda: {w for n in self.OUTPUTS for w in words(n) if len(w) > 2} - {"audio"}
+        exists = self.saved[5]
+        apps.os.path.exists = lambda p: bool(re.fullmatch(r"[A-Z]:\\", str(p))) or exists(p)
+        for v in ("APPDATA", "LOCALAPPDATA", "TEMP", "ProgramFiles", "ProgramFiles(x86)", "USERPROFILE", "OneDrive"):
+            os.environ.setdefault(v, "C:\\Users\\x\\" + v)
+        return self
+
+    def __exit__(self, *exc):
+        from wva import apps, audio
+        (apps.WINDOWS, apps._START, apps._GAMES, apps._protocol_registered, audio._known_words,
+         apps.os.path.exists, apps.os.path.expandvars, env) = self.saved
+        os.environ.clear()
+        os.environ.update(env)
+
+
+def test_routing_on_a_real_pc():
+    """What's installed mustn't change what a phrase means: every example routes the same on
+    a friend's PC (his setup check said 1 of 284 didn't: "show desktop" went to Vesktop)."""
+    with FakePC():
+        bad = []
+        for case in CASES:
+            text, want, front = (*case, "")[:3]
+            got = [r.say for r, _, _ in route(text, front)]
+            if got != want:
+                bad.append(f"{text!r}: want {want}, got {got}")
+        assert not bad, "\n".join(bad)
+        from wva import actions
+        assert actions.can_open("vesktop") and actions.can_open("counter strike") and actions.can_open("rainbow six siege")
+
+
 def test_mishearings():
     """What the recognisers (Parakeet especially, which takes no prompt) actually wrote."""
     for text, want in [("Plus Discord from the tray.", ["quit <app> completely"]),
