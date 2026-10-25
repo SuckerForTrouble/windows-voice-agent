@@ -126,11 +126,13 @@ def audio_ctx(seconds):
 
 
 def _collapse(text):
-    """'Next song. Next song.' / 'Open YouTube, open YouTube,' -> said once."""
+    """'Next song. Next song.' / 'Open YouTube, open YouTube,' / 'Open Spotify… Open Spotify… Open'
+    -> said once: the first part repeated, maybe ending in a cut-off start of it again."""
+    key = lambda p: re.sub(r"[^\w']+", " ", p).strip().lower()  # noqa: E731
     for sep in (r"(?<=[.?!])\s+", r",\s*"):
         parts = [p for p in re.split(sep, text.strip()) if p.strip()]
-        keys = {re.sub(r"[^\w']+", " ", p).strip().lower() for p in parts}
-        if len(parts) > 1 and len(keys) == 1:
+        if len(parts) > 1 and key(parts[1]) == key(parts[0]) and \
+                all(key(p) == key(parts[0]) or key(parts[0]).startswith(key(p)) for p in parts[2:]):
             return parts[0].strip().rstrip(",")
     return text
 

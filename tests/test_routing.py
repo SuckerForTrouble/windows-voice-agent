@@ -161,6 +161,9 @@ def test_whisper_tidy():
     assert stt._tidy("Next song. Next song.") == "Next song."
     assert stt._tidy("What's using my RAM? What's using my RAM?") == "What's using my RAM?"
     assert stt._tidy("Open YouTube, open YouTube, Open YouTube,") == "Open YouTube"
+    assert stt._tidy("Open Spotify and Search for Interstellar. Open Spotify and Search for Interstellar. Open") == \
+        "Open Spotify and Search for Interstellar."  # the tiny model in CI, 2026-10-25
+    assert stt._tidy("Close the tab. Close Discord.") == "Close the tab. Close Discord."  # two different things stay
     assert stt._tidy("Open YouTube and search for lofi beats.") == "Open YouTube and search for lofi beats."
     assert stt._tidy("New tab, type hello, press enter") == "New tab, type hello, press enter"
     assert stt._tidy("Thank you.") == ""
