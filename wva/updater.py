@@ -37,8 +37,9 @@ def latest_version():
         return None
 
 
-def check(notify, before_install=None):
-    """-> 'none' | 'updating' | 'error: …' | 'source' (running from a checkout: nothing to install)."""
+def check(notify, before_install=None, progress=None):
+    """-> 'none' | 'updating' | 'error: …' | 'source' (running from a checkout: nothing to install).
+    progress(percent) is called every 10% of the download."""
     try:
         rel = _latest()
     except Exception as e:
@@ -52,18 +53,26 @@ def check(notify, before_install=None):
     if not paths.FROZEN:
         notify(f"Version {tag} is out (running from source: git pull to update)")
         return "source"
-    notify(f"Updating to {tag}… back in a few seconds")
+    notify(f"Updating to {tag}: downloading…")
     dest = os.path.join(tempfile.gettempdir(), f"WindowsVoiceAgent-Setup-{tag}.exe")
     try:
         req = urllib.request.Request(asset["browser_download_url"], headers={"User-Agent": "WindowsVoiceAgent"})
+        size, done, shown = asset.get("size") or 0, 0, 0
         with urllib.request.urlopen(req, timeout=60) as r, open(dest, "wb") as f:
             while True:
                 chunk = r.read(1 << 20)
                 if not chunk:
                     break
                 f.write(chunk)
+                done += len(chunk)
+                if progress and size and done * 100 // size >= shown + 10:
+                    shown = done * 100 // size // 10 * 10
+                    progress(min(shown, 100))
+        if size and os.path.getsize(dest) != size:
+            return f"error: the download stopped early ({os.path.getsize(dest)} of {size} bytes)"
     except Exception as e:
         return f"error: download failed: {e}"
+    notify(f"Installing {tag}: back in a few seconds")
     if before_install:
         before_install()
     # Wait until this process is gone, then install silently; the installer starts the new version.

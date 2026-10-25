@@ -739,16 +739,37 @@ class App:
                 except OSError:
                     pass
 
+    def _tell(self, msg, kind="info", seconds=4):
+        """On the pill (Windows hides tray balloons in games and Do Not Disturb), else a balloon."""
+        if config.get("osd"):
+            osd.show(msg, kind, seconds)
+        else:
+            self.tray.notify(msg)
+
     def check_updates(self, interactive=False):
+        """Quietly every 6 hours (waits while you're talking), or when asked (tray / "check for
+        updates"): then it always runs and always answers. In 0.1.10 the asked-for one gave up
+        without a word whenever a command was running, and the voice command always is one."""
         def go():
-            if self.rec.active or self.busy:
-                return
-            result = updater.check(self.tray.notify, before_install=self.stt.stop)
+            if not interactive:  # wait for a quiet moment (up to 20 minutes) rather than skip 6 hours
+                for _ in range(40):
+                    if not (self.rec.active or self.busy):
+                        break
+                    time.sleep(30)
+                else:
+                    return
             if interactive:
-                if result == "none":
-                    self.tray.notify(f"You have the latest version ({__version__})")
-                elif result.startswith("error"):
-                    self.tray.notify(f"Couldn't check for updates: {result[7:]}")
+                self._tell("Checking for updates…", "busy", 0)
+            result = updater.check(lambda m: self._tell(m, "busy", 0), before_install=self.stt.stop,
+                                   progress=lambda pct: self._tell(f"Downloading the update… {pct}%", "busy", 0))
+            log.info("update check (%s): %s", "asked" if interactive else "quiet", result)
+            if result.startswith("error"):
+                if interactive:
+                    self._tell(f"Couldn't update: {result[7:]}", "error", 8)
+                else:
+                    self._ready_again()
+            elif interactive and result == "none":
+                self._tell(f"You have the latest version ({__version__})", "ok", 4)
         threading.Thread(target=go, daemon=True).start()
 
     def restart(self):
