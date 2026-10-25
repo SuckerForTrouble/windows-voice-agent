@@ -9,5 +9,5 @@
 """
 APP_NAME = "Windows Voice Agent"
 APP_ID = "WindowsVoiceAgent"
-__version__ = "0.1.9"
+__version__ = "0.1.10"
 REPO = "SuckerForTrouble/windows-voice-agent"
