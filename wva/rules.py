@@ -9,6 +9,7 @@ from . import choices as ch
 from . import extras as x
 from . import files as fl
 from . import system as s
+from . import engine
 from .engine import num, parse_duration, rule
 
 FO, SD = "Files & folders", "Sound devices"
@@ -224,7 +225,13 @@ rule(H, "never mind", "Do nothing (started talking by mistake)",
       r"scratch that", r"nothing", r"no(?:thing)?,? never ?mind", r"oops"], s.never_mind, wake=True)
 
 # Browser (keystrokes into the window in front) ---------------------------------------
-rule(B, "new tab", "Ctrl+T", [r"(?:open |make |create |launch |start |give me )?(?:a |another )?new tab"], lambda: a.keys("ctrl+t"), after=0.5)
+# No pattern of its own: engine.plan puts it first when a command starts (or ends) with a
+# browser's name. Then pages open in that browser, and keys go to it.
+engine.BROWSER_STEP = rule(B, "in <browser>, <command>", "Name the browser first: 'brave, search cats', 'in edge open youtube', "
+                           "'chrome new tab', 'open spotify in firefox', 'brave settings'", [],
+                           lambda b, *groups: a.use_browser(b, any(g != A for g in groups)), after=0.2)
+rule(B, "new tab", "Ctrl+T", [r"(?:open |make |create |launch |start |give me )?(?:a |another )?new tab"],
+     lambda: None if a.CTX.browser_fresh else a.keys("ctrl+t"), after=0.5)  # a browser just started shows one
 rule(B, "close tab", "Ctrl+W", [r"close " + THE + r"(?:current )?tab"], lambda: a.keys("ctrl+w"))
 rule(B, "reopen tab", "Ctrl+Shift+T",
      [r"(?:reopen|restore|bring back|undo close|undo closing|open again) " + THE + r"(?:last |closed |previous )*tab"],
@@ -236,7 +243,9 @@ rule(B, "tab <1-9>", "Jump to a tab", [r"(?:go to |switch to )?(?:the )?tab (?:n
      lambda n: a.keys(f"ctrl+{9 if n == 'last' else num(n)}"), guard=lambda n: n == "last" or (num(n) or 0) in range(1, 10))
 rule(B, "new window | private window", "Ctrl+N / private (Ctrl+Shift+N, Firefox Ctrl+Shift+P)",
      [r"(?:open |make )?(?:a )?(new|private) (?:browser )?window"],
-     lambda k: a.keys("ctrl+n" if k == "new" else "ctrl+shift+p" if a.fg_title_has("firefox") else "ctrl+shift+n"), after=0.8)
+     lambda k: None if k == "new" and a.CTX.browser_fresh else a.keys(
+         "ctrl+n" if k == "new" else "ctrl+shift+p" if a.CTX.browser in ("firefox", "zen") or a.fg_title_has("firefox", "zen")
+         else "ctrl+shift+n"), after=0.8)
 rule(B, "go back | forward", "Alt+Left / Alt+Right",
      [r"(?:go |page )?(back)", r"(?:go |page )?(forward)", r"(?:go to )?(?:the )?(previous|next) page"],
      lambda d: a.keys("alt+left" if d in ("back", "previous") else "alt+right"))

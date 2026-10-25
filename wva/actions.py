@@ -241,14 +241,15 @@ def can_open(name):
 
 
 def open_app(name):
-    r = apps.resolve(name)
+    page = apps.page_for(name, CTX.browser) if CTX.browser else None  # "in brave open spotify": its web player
+    r = ("url", page, name) if page else apps.resolve(name)
     if not r:
         ui.notify(f"Don't know an app called {name}")
         return
     kind, target, label = r
     CTX.last_target = apps.canonical(name)
     if CTX.dry:
-        log(f"open {kind} {target}")
+        log(f"open {kind} {target}" + (f" in {CTX.browser}" if kind == "url" and CTX.browser else ""))
         return
     try:
         apps.launch(kind, target)
@@ -257,6 +258,8 @@ def open_app(name):
 
 
 def focus_app(name):
+    if CTX.browser and apps.page_for(name, CTX.browser):  # "brave settings", "edge youtube"
+        return open_app(name)
     t = find_target(name)
     if not t:
         if can_open(name):
@@ -274,6 +277,36 @@ def focus_app(name):
         open_app(t.label)
     else:
         ui.notify(f"{t.label} has no window to show")
+
+
+def use_browser(name, keys_into=True):
+    """'brave, …' / 'in edge …': pages from here on open in that browser, and keys go to
+    it: it comes to the front, or starts when it isn't running (not needed when only
+    pages follow: opening one starts it)."""
+    CTX.browser = name
+    if CTX.dry:
+        return log(f"use {name}" + (", in front" if keys_into else " for pages"))
+    ws = app_windows(set(apps.APP_PROCS[name]))
+    if ws:
+        win.focus(ws[0].hwnd)
+        time.sleep(0.3)
+        return
+    if not keys_into:
+        return
+    exe = apps.browser_exe(name)
+    try:
+        subprocess.Popen([exe], creationflags=NO_WINDOW) if exe else open_app(name)
+    except OSError as e:
+        return ui.notify(f"Couldn't start {name}: {e}")
+    CTX.browser_fresh = True
+    for _ in range(40):  # up to 8 s for its window
+        time.sleep(0.2)
+        ws = app_windows(set(apps.APP_PROCS[name]))
+        if ws:
+            win.focus(ws[0].hwnd)
+            time.sleep(0.5)
+            return
+    ui.notify(f"{name.capitalize()} didn't open a window")
 
 
 def close_app(name):
@@ -480,7 +513,7 @@ def web(query, engine=None):
         engine = ctx if ctx in SEARCH else "web"
     url = SEARCH[engine] + (quote(query) if engine in ("maps", "google maps") else quote_plus(query))
     if CTX.dry:
-        log(f"open {url}")
+        log(f"open {url}" + (f" in {CTX.browser}" if CTX.browser else ""))
         return
     apps.launch("url", url)
 
@@ -755,7 +788,7 @@ def mute_mic():
         ui.notify(f"Couldn't reach the mic: {e}")
 
 
-APP_SOUND = ("spotify", "discord", "chrome", "edge", "firefox", "brave", "opera", "zen", "stremio", "vlc",
+APP_SOUND = ("spotify", "discord", "chrome", "edge", "firefox", "brave", "opera", "zen", "vivaldi", "stremio", "vlc",
              "steam", "whatsapp", "telegram", "game", "browser", "valorant", "roblox", "minecraft", "teams", "zoom")
 
 

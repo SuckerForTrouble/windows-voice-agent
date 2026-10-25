@@ -12,6 +12,7 @@ import time
 from pathlib import Path
 
 from . import paths
+from .engine import CTX
 
 WINDOWS = sys.platform == "win32"
 
@@ -25,6 +26,8 @@ APPS = {
     "edge": ["app:Microsoft Edge", "exe:msedge.exe"], "microsoft edge": ["app:Microsoft Edge", "exe:msedge.exe"],
     "firefox": ["app:Firefox", "exe:firefox.exe"], "brave": ["app:Brave", "exe:brave.exe"],
     "opera": ["app:Opera GX Browser", "app:Opera Browser", "exe:opera.exe"], "opera gx": ["app:Opera GX Browser"],
+    "zen": ["app:Zen Browser", "app:Zen", "exe:zen.exe"], "zen browser": ["app:Zen Browser", "app:Zen", "exe:zen.exe"],
+    "vivaldi": ["app:Vivaldi", "exe:vivaldi.exe"],
     "spotify": ["app:Spotify", "uri:spotify:", "url:https://open.spotify.com"],
     "discord": ["app:Discord", "uri:discord://", "url:https://discord.com/app"],
     "stremio": ["app:Stremio", "uri:stremio:///", "url:https://web.stremio.com"],
@@ -122,7 +125,7 @@ TLDS = "com|org|net|io|dev|in|co|app|ai|me|tv|gg|xyz|sh|so|to"
 APP_PROCS = {
     "spotify": ["spotify.exe"], "discord": ["discord.exe", "discordptb.exe", "discordcanary.exe", "vesktop.exe", "equibop.exe"],
     "chrome": ["chrome.exe"], "edge": ["msedge.exe"], "firefox": ["firefox.exe"], "brave": ["brave.exe"],
-    "opera": ["opera.exe", "opera_gx.exe"], "zen": ["zen.exe"],
+    "opera": ["opera.exe", "opera_gx.exe"], "zen": ["zen.exe"], "vivaldi": ["vivaldi.exe"],
     "steam": ["steam.exe", "steamwebhelper.exe"], "epic": ["epicgameslauncher.exe", "epicwebhelper.exe"],
     "stremio": ["stremio.exe", "stremio-shell-ng.exe", "stremio-runtime.exe", "stremio-service.exe"],
     "whatsapp": ["whatsapp.exe", "whatsapp.root.exe"], "telegram": ["telegram.exe"],
@@ -142,7 +145,7 @@ APP_PROCS = {
 }
 SPOKEN = {
     "google chrome": "chrome", "microsoft edge": "edge", "mozilla firefox": "firefox", "opera gx": "opera",
-    "brave browser": "brave", "code": "vs code", "visual studio code": "vs code", "epic games": "epic",
+    "brave browser": "brave", "zen browser": "zen", "mozilla": "firefox", "code": "vs code", "visual studio code": "vs code", "epic games": "epic",
     "epic games launcher": "epic", "epic launcher": "epic", "riot client": "riot", "league of legends": "league",
     "lol": "league", "battlenet": "battle net", "battle dot net": "battle net", "blizzard": "battle net",
     "ea app": "ea", "origin": "ea", "ubisoft connect": "ubisoft", "uplay": "ubisoft", "counter strike 2": "counter strike",
@@ -151,7 +154,7 @@ SPOKEN = {
     "spotify app": "spotify", "discord app": "discord", "steam app": "steam", "explorer": "file explorer",
     "files": "file explorer", "file manager": "file explorer", "windows terminal": "terminal", "the game": "game",
 }
-BROWSERS = ("chrome", "edge", "firefox", "brave", "opera", "zen")
+BROWSERS = ("chrome", "edge", "firefox", "brave", "opera", "zen", "vivaldi")
 # Never closed or killed, whatever the name sounds like.
 PROTECTED = {"explorer.exe", "csrss.exe", "winlogon.exe", "wininit.exe", "services.exe", "lsass.exe", "smss.exe",
              "svchost.exe", "dwm.exe", "system", "registry", "fontdrvhost.exe", "sihost.exe", "ctfmon.exe",
@@ -427,7 +430,93 @@ def steam_folder(which):
     return str(shots[0]) if shots else None
 
 
+# ----------------------------------------------------------------- a browser by name
+# Its own pages, as "brave settings" / "in chrome open downloads" mean them.
+INNER = {"settings": "settings", "downloads": "downloads", "extensions": "extensions", "history": "history",
+         "bookmarks": "bookmarks"}
+GECKO = {"settings": "about:preferences", "downloads": "about:downloads", "extensions": "about:addons",
+         "history": "about:library", "bookmarks": "about:library"}  # Firefox and Zen
+
+
+def page_for(name, browser=None):
+    """A web address for 'youtube', 'spotify' (its web player), 'reddit dot com', or with a
+    browser named, that browser's own settings / downloads page. None if there is none."""
+    n = canonical(name)
+    n = {"settings": "settings", "windows settings": "settings", "downloads folder": "downloads",
+         "my downloads": "downloads"}.get(n, n)
+    if browser and n in INNER:
+        return GECKO[n] if browser in ("firefox", "zen") else f"{browser}://{INNER[n]}"
+    if n in SITES:
+        return SITES[n]
+    url = next((c[4:] for c in APPS.get(n, []) if c.startswith("url:")), None)
+    return url or domain_url(n)
+
+
+def _reg_default(root, key):
+    import winreg
+    try:
+        with winreg.OpenKey(root, key) as k:
+            return winreg.QueryValueEx(k, "")[0]
+    except OSError:
+        return ""
+
+
+def browser_exe(name):
+    """Where a browser's program is: its running process, then Windows' own list of
+    browsers (StartMenuInternet: every browser registers there), then App Paths."""
+    if not WINDOWS:
+        return None
+    import psutil
+    exes = APP_PROCS.get(name, [])
+    for p in psutil.process_iter(["name", "exe"]):
+        try:
+            if (p.info["name"] or "").lower() in exes and p.info["exe"]:
+                return p.info["exe"]
+        except Exception:
+            continue
+    import winreg
+    for root in (winreg.HKEY_CURRENT_USER, winreg.HKEY_LOCAL_MACHINE):
+        for base in (r"SOFTWARE\Clients\StartMenuInternet", r"SOFTWARE\WOW6432Node\Clients\StartMenuInternet"):
+            try:
+                with winreg.OpenKey(root, base) as k:
+                    subs = [winreg.EnumKey(k, i) for i in range(winreg.QueryInfoKey(k)[0])]
+            except OSError:
+                continue
+            for sub in subs:
+                if name not in norm(sub + " " + _reg_default(root, f"{base}\\{sub}")):
+                    continue
+                cmd = _reg_default(root, f"{base}\\{sub}\\shell\\open\\command")
+                m = re.match(r'\s*"([^"]+)"|\s*(\S+)', cmd)
+                exe = m and (m.group(1) or m.group(2))
+                if exe and os.path.exists(exe):
+                    return exe
+    for exe in exes:
+        for root in (winreg.HKEY_CURRENT_USER, winreg.HKEY_LOCAL_MACHINE):
+            path = _reg_default(root, f"SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\App Paths\\{exe}")
+            if path and os.path.exists(path.strip('"')):
+                return path.strip('"')
+    return None
+
+
+def open_in_browser(name, url):
+    """The page in that browser (a new tab if it's open). False if the browser isn't found."""
+    exe = browser_exe(name)
+    if exe:
+        subprocess.Popen([exe, url], creationflags=0x08000000)
+        return True
+    r = resolve(name)
+    if r and r[0] == "lnk":  # a Start-menu shortcut takes the address as its argument
+        os.startfile(r[1], "open", url)
+        return True
+    return False
+
+
 def launch(kind, target):
+    if kind == "url" and CTX.browser:
+        if open_in_browser(CTX.browser, target):
+            return
+        from . import ui
+        ui.notify(f"Couldn't find {CTX.browser.capitalize()}: opened it in your default browser")
     if kind == "cmd":
         import shlex
         subprocess.Popen(shlex.split(target, posix=False), creationflags=0x08000000)

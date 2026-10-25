@@ -25,6 +25,8 @@ class Ctx:
     last_target = None   # what the previous step of a chain opened ("stremio", "spotify", …)
     log = print          # where dry-run lines go
     front = ""           # dry runs: pretend this window title is in front ("instagram", "youtube")
+    browser = None       # "brave, search cats": pages open in this browser (set by the "in <browser>" step)
+    browser_fresh = False  # that browser was started just now (it already shows a new tab)
 
 
 CTX = Ctx()
@@ -40,6 +42,7 @@ def rule(group, say_, desc, pats, fn, wake=False, guard=None, free=False, after=
     if isinstance(pats, str):
         pats = [pats]
     RULES.append(Rule(group, say_, desc, [re.compile(p) for p in pats], fn, wake, guard, free, after, late))
+    return RULES[-1]
 
 
 WAKE = r"(?:(?:hey|hi|ok|okay|yo)\s+)?(?:computer|computers|computa|komputer|compute her|commuter|come pewter|compooter)\b"
@@ -131,6 +134,16 @@ ALIASES = [(re.compile(p), r) for p, r in ALIASES]
 # The user's own fixes, from tuning.txt (see tuning.py): filled in at start-up.
 TUNE_WORDS = []   # [(compiled regex, replacement)]
 TUNE_SAY = {}     # natural phrase -> phrase that routes
+
+# "brave, search cats" / "in edge open youtube" / "chrome new tab" / "open youtube in brave":
+# the rest runs in that browser (rules.py sets BROWSER_STEP, the step that picks it).
+BROWSER_NAMES = {"brave": "brave", "brave browser": "brave", "edge": "edge", "microsoft edge": "edge", "ms edge": "edge",
+                 "chrome": "chrome", "google chrome": "chrome", "firefox": "firefox", "mozilla": "firefox",
+                 "mozilla firefox": "firefox", "opera": "opera", "opera gx": "opera", "zen": "zen", "vivaldi": "vivaldi"}
+_BNAME = "(?:the |my )?(" + "|".join(sorted(BROWSER_NAMES, key=len, reverse=True)) + r")(?: browser)?"
+BROWSER_FIRST = re.compile(r"(?:(?:in|on|using|with|use|via|open) )?" + _BNAME + r"(?:[,.;:!?]| and| then)* (.+)")
+BROWSER_LAST = re.compile(r"(.+?)[,.]? (?:in|on|using|with) " + _BNAME + r"[.!?]?")
+BROWSER_STEP = None
 
 # Politeness and filler around a request, stripped until nothing changes.
 LEAD = [
@@ -275,11 +288,36 @@ def match(t):
 def plan(text, woke=False):
     """Transcript -> (steps, woke). steps = [(rule, groups, text)] or [] for dictation.
     woke=True: the agent key was used, as good as saying the wake word."""
-    t = clean(text)
+    CTX.browser, CTX.browser_fresh = None, False  # a new command: no browser picked yet
+    return _plan(clean(text), woke)
+
+
+def _in_browser(t, woke, whole):
+    """'brave, search cats' -> the "in <browser>" step, then the rest's steps; else None.
+    A whole command wins ('chrome volume up' is Chrome's volume), and a browser named at the
+    end only takes commands without free text ('search tips in chrome' searches all of it)."""
+    if BROWSER_STEP is None or (whole and not whole[0].free and not whole[0].late):
+        return None
+    for pat, last in ((BROWSER_FIRST, False), (BROWSER_LAST, True)):
+        m = pat.fullmatch(t)
+        if not m:
+            continue
+        name, rest = (m.group(2), m.group(1)) if last else (m.group(1), m.group(2))
+        steps, woke2 = _plan(rest, woke)
+        if steps and not (last and any(r.free for r, _, _ in steps)):
+            b = BROWSER_NAMES[name]
+            return [(BROWSER_STEP, (b, *[r.group for r, _, _ in steps]), f"in {b}")] + steps, woke2
+    return None
+
+
+def _plan(t, woke):
     m = re.match(WAKE + r"[\s,.!?]*(.*)", t)
     if m:
         woke, t = True, m.group(1)
     whole = match(natural(t))
+    picked = _in_browser(t, woke, whole)
+    if picked:
+        return picked
     parts = [p for p in re.split(CHAIN, t) if p and p.strip(" ,.;!?")]
     chain = []
     if len(parts) > 1:

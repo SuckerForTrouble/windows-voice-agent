@@ -24,7 +24,7 @@ GROUP_INFO = {
     "Sound & media": ("🔊", "Volume, pause, next song."),
     "App volume": ("🎚️", "Just one app louder or quieter."),
     "Sound devices": ("🎧", "Headphones or speakers, and which app plays where."),
-    "Browser": ("🌐", "Tabs, scrolling, zoom."),
+    "Browser": ("🌐", "Tabs, scrolling, zoom. Say a browser's name first to use that one."),
     "Keyboard": ("⌨️", "Type words, press keys."),
     "Windows": ("🖥️", "Snap, resize, minimise windows."),
     "System": ("⚙️", "Screenshot, lock, sleep, Wi-Fi."),

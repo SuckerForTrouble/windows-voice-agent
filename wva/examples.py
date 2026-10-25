@@ -129,6 +129,23 @@ CASES = [
     ("find linux on this page", ["find <text> on page"]),
     ("open the downloads page", ["downloads | history page"]),
     ("New tab, type hello world, press enter", ["new tab", "type <text>", "press <key>"]),
+    # a browser by name: the rest runs in it
+    ("Brave, search cats", ["in <browser>, <command>", "search <text>"]),
+    ("in edge open youtube", ["in <browser>, <command>", "open <app | game | site | folder | settings page>"]),
+    ("chrome new tab", ["in <browser>, <command>", "new tab"]),
+    ("open youtube in brave", ["in <browser>, <command>", "open <app | game | site | folder | settings page>"]),
+    ("open spotify in firefox", ["in <browser>, <command>", "open <app | game | site | folder | settings page>"]),
+    ("brave settings", ["in <browser>, <command>", "<app name>"]),
+    ("on microsoft edge, open a private window", ["in <browser>, <command>", "new window | private window"]),
+    ("opera gx close this tab", ["in <browser>, <command>", "close tab"]),
+    ("using vivaldi go back", ["in <browser>, <command>", "go back | forward"]),
+    ("zen browser, search reddit for keyboards", ["in <browser>, <command>", "reddit | github <text>"]),
+    ("open brave and search for lofi beats", ["in <browser>, <command>", "search <text>"]),
+    ("crome, next tab", ["in <browser>, <command>", "next | previous tab"]),
+    ("mozilla, open reddit dot com", ["in <browser>, <command>", "open <app | game | site | folder | settings page>"]),
+    ("search how to clear cache in chrome", ["search <text>"]),  # free text keeps the browser's name
+    ("chrome volume 30", ["<app> volume <n> | up | down"]),
+    ("Edge of tomorrow", []),
     # Keyboard
     ("type good morning everyone", ["type <text>"]),
     ("press control shift t", ["press <key>"]),
