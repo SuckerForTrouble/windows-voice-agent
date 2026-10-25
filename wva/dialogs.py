@@ -133,11 +133,12 @@ def call_word(out, current):
     tk, root = _window("Call word")
     tk.Label(root, text="Say this first, then the command", bg="#1d2029", fg="#e8eaf0",
              font=("Segoe UI", 15, "bold")).pack()
-    tk.Label(root, text="Like “Jarvis, open Spotify”. Pick a word you don't say in normal talk:\n"
-                        "one to three words, at least 4 letters (Jarvis, Friday, Hey Billa…).",
+    tk.Label(root, text="Like “Angel, open Spotify”. Pick a word you don't say in normal talk:\n"
+                        "one to three words, at least 4 letters (Angel, Jarvis, Hey Billa…).\n"
+                        "Several work too, with commas: Angel, Jarvis",
              bg="#1d2029", fg="#a2a9b8", font=("Segoe UI", 10), justify="center").pack(pady=(6, 14))
     var = tk.StringVar(value=current.title())
-    entry = tk.Entry(root, textvariable=var, width=28, font=("Segoe UI", 14), justify="center")
+    entry = tk.Entry(root, textvariable=var, width=32, font=("Segoe UI", 14), justify="center")
     entry.pack(ipady=4)
     entry.select_range(0, "end")
     result = {}

@@ -208,17 +208,17 @@ class Window:
         self.key_note = tk.Label(self.page, text="", bg=BG, fg="#f76b15", font=self.f["small"], anchor="w")
         self.key_note.pack(fill="x")
 
-        self._row("Always listening", "No key: start with the call word, like “Jarvis, open Spotify”. The mic stays "
+        self._row("Always listening", "No key: start with the call word, like “Angel, open Spotify”. The mic stays "
                   "on; anything that doesn't start with the call word is thrown away.", "always_listen",
                   on_change=self._call_state)
         cw = tk.Frame(self.page, bg=BG)
         cw.pack(fill="x", pady=(2, 0))
-        tk.Label(cw, text="Call word", bg=BG, fg=INK, font=self.f["body"], width=16, anchor="w").pack(side="left")
-        self.call_var = tk.StringVar(value=self.v.get("call_word", "computer").title())
-        self.call_entry = tk.Entry(cw, textvariable=self.call_var, width=22, font=self.f["body"], bg=CARD, fg=INK,
+        tk.Label(cw, text="Call words", bg=BG, fg=INK, font=self.f["body"], width=16, anchor="w").pack(side="left")
+        self.call_var = tk.StringVar(value=self.v.get("call_word", "angel").title())
+        self.call_entry = tk.Entry(cw, textvariable=self.call_var, width=26, font=self.f["body"], bg=CARD, fg=INK,
                                    insertbackground=INK, relief="flat")
         self.call_entry.pack(side="left", ipady=4)
-        self.call_note = tk.Label(cw, text="", bg=BG, fg="#f76b15", font=self.f["small"])
+        self.call_note = tk.Label(cw, text="several: Angel, Jarvis", bg=BG, fg=SOFT, font=self.f["small"])
         self.call_note.pack(side="left", padx=8)
         self._call_state()
 
@@ -305,16 +305,16 @@ class Window:
         self._set_key(self.capturing, combo)
 
     def _save(self):
-        word = " ".join(self.call_var.get().lower().split())
+        word = ", ".join(listen.call_words(self.call_var.get())) if self.call_var.get().strip() else ""
         if self.v.get("always_listen"):
             why = listen.call_word_ok(word)
             if why:
-                self.call_note.configure(text=why)
+                self.call_note.configure(text=why, fg="#f76b15")
                 return
         out = {k: self.v[k] for k in ("agent_key", "dictate_key", "model", "always_listen", "music_app", "movie_app",
                                      "browser", "voice_replies", "sounds", "start_with_windows", "unload_in_games",
                                      "auto_update")}
-        out["call_word"] = word or self.cur.get("call_word", "computer")
+        out["call_word"] = word or self.cur.get("call_word", "angel")
         out["dictate_language"] = "hi" if self.v.get("hindi") else ("en" if self.cur.get("dictate_language") == "hi"
                                                                       else self.cur.get("dictate_language", "en"))
         out["osd"] = self.v["pill"] != "off"

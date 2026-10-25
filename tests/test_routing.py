@@ -89,9 +89,27 @@ def test_mishearings():
                        ("REM", ["ram"]),
                        ("Watch Breaking Bad Season 2 Episode 3 on Stremeo.", ["watch <movie | show> on Stremio"]),
                        ("open stremyo", ["open <app | game | site | folder | settings page>"]),
-                       ("plus one for that idea", [])]:
+                       ("plus one for that idea", []),
+                       # a verb in another form, misspellings and split words (2026-10-25)
+                       ("Increased the volume.", ["louder | quieter"]), ("Opened Spotify.", ["open <app | game | site | folder | settings page>"]),
+                       ("Closing Discord", ["close <app>"]), ("Paused the music.", ["pause | play | stop music"]),
+                       ("Skipped this song", ["next | previous track"]), ("Volumn up", ["volume up | down"]),
+                       ("Lauder", ["louder | quieter"]), ("In crease the volume", ["louder | quieter"]),
+                       ("Opened Chrome, searched cats", ["open <app | game | site | folder | settings page>", "search <text>"]),
+                       ("Pressed enter and then closed tab", ["press <key>", "close tab"]),
+                       ("Turning off wifi", ["wifi | bluetooth on | off"]), ("Muted this court", ["mute me on Discord"]),
+                       ("Finding Nemo", []), ("settings", ["<app name>"])]:
         got = [r.say for r, _, _ in route(text)]
         assert got == want, f"{text!r}: want {want}, got {got}"
+    # only the first word of a command changes form: what gets typed keeps its words
+    out = io.StringIO()
+    engine.CTX.log = lambda m: out.write(m + "\n")
+    try:
+        for r, groups, _ in route("Type I closed it, then opened the door"):
+            r.fn(*groups)
+    finally:
+        engine.CTX.log = print
+    assert "closed it" in out.getvalue() and "opened the door" in out.getvalue(), out.getvalue()
 
 
 def test_guide_starters_route():
@@ -139,19 +157,31 @@ def test_always_listening_detector():
 
 
 def test_call_word():
-    from wva.listen import call_word_ok, strip_call
+    from wva.listen import call_word_ok, call_words, strip_call
     cases = [("Jarvis, open Spotify.", "jarvis", "open Spotify."), ("Hey Jarvis open spotify", "jarvis", "open spotify"),
              ("Jarvus, volume up", "jarvis", "volume up"), ("open spotify", "jarvis", None),
              ("I told Jarvis to stop", "jarvis", None), ("Jarvis.", "jarvis", ""), ("Jarvis", "jarvis", ""),
              ("Computer, volume up", "computer", "volume up"), ("Commuter volume up", "computer", "volume up"),
              ("Okay computer, next song", "computer", "next song"), ("the computer is slow", "computer", None),
              ("Hey Friday, what time is it", "hey friday", ", what time is it".lstrip(" ,")),
-             ("Billa, close discord", "billa", "close discord")]
+             ("Billa, close discord", "billa", "close discord"),
+             # the default, Angel: what recognisers write for it, and stutters
+             ("Angel, open Spotify.", "angel", "open Spotify."), ("Angela, volume up", "angel", "volume up"),
+             ("Angle open discord", "angel", "open discord"), ("An gel, next song", "angel", "next song"),
+             ("A-angel, pause", "angel", "pause"), ("An angel, mute discord", "angel", "mute discord"),
+             ("Ang angel open spotify", "angel", "open spotify"), ("Angel angel, close chrome", "angel", "close chrome"),
+             ("Hey Angel, what time is it", "angel", "what time is it"), ("Anjel, volume 30", "angel", "volume 30"),
+             ("Angel.", "angel", ""), ("I saw an angel today", "angel", None), ("angry birds", "angel", None),
+             ("an apple a day", "angel", None),
+             # several call words
+             ("Jarvis, open Spotify", "angel, jarvis", "open Spotify"), ("Angela, next song", "angel, jarvis", "next song"),
+             ("Friday stop", "angel, jarvis", None)]
     for text, word, want in cases:
         got = strip_call(text, word)
         assert got == want, f"{text!r} with {word!r}: want {want!r}, got {got!r}"
-    assert call_word_ok("Jarvis") is None and call_word_ok("hey friday") is None
-    assert call_word_ok("play") and call_word_ok("bob") and call_word_ok("one two three four")
+    assert call_word_ok("Jarvis") is None and call_word_ok("hey friday") is None and call_word_ok("Angel, Jarvis") is None
+    assert call_word_ok("play") and call_word_ok("bob") and call_word_ok("one two three four") and call_word_ok("angel, go")
+    assert call_words(" Angel ,jarvis, angel,") == ["angel", "jarvis"] and call_words("") == ["angel"]
 
 
 def test_whisper_tidy():

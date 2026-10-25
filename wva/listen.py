@@ -71,38 +71,79 @@ class Segmenter:
         return None
 
 
+# What the recognisers write for a call word, beyond near spellings (those always count)
+HEARD_AS = {
+    "angel": {"angle", "angela", "angelo", "angels", "angel's", "angle's", "anjel", "anjal", "angil", "angell", "engel",
+              "ainjel", "aangel", "anjelo", "angie", "angelina", "angeli", "anchal", "and gel", "an gel",
+              "and jel", "an jel", "ann gel", "in gel", "ain gel"},
+}
+
+
+def call_words(setting):
+    """'angel, jarvis' -> ['angel', 'jarvis'] (the setting can hold several, comma-separated)."""
+    out = []
+    for w in (setting or "").split(","):
+        w = " ".join(re.findall(r"[a-z']+", w.lower()))
+        if w and w not in out:
+            out.append(w)
+    return out or ["angel"]
+
+
 def call_word_ok(word):
-    """None if it can be the call word, else why not."""
-    w = " ".join(re.findall(r"[a-z']+", word.lower()))
-    if not w or len(w.split()) > 3:
-        return "one to three words, letters only"
-    if len(w.replace(" ", "")) < 4:
-        return "too short: it would go off all the time"
-    if w in TOO_COMMON:
-        return "too common a word: it would go off in normal talk"
+    """None if it can be the call word (or every one of several, comma-separated), else why not."""
+    for w in [" ".join(re.findall(r"[a-z']+", p.lower())) for p in (word or "").split(",")] or [""]:
+        if not w or len(w.split()) > 3:
+            return "one to three words each, letters only (several: separate them with commas)"
+        if len(w.replace(" ", "")) < 4:
+            return f"“{w}” is too short: it would go off all the time"
+        if w in TOO_COMMON:
+            return f"“{w}” is too common a word: it would go off in normal talk"
+    return None
+
+
+def _strip_one(text, word):
+    if word == "computer":  # the built-in one knows its mishearings ("commuter", "compute her"…)
+        m = re.match(r"\W*(?:(?:hey|hi|ok|okay|yo|so)\W+)*" + WAKE + r"\W*", text, re.I)
+        return text[m.end():].strip() if m else None
+    want = word.split()
+    k = len(want)
+    toks = [(m.group(0).lower(), m.end()) for m in re.finditer(r"[A-Za-z0-9']+", text)]
+    heard = HEARD_AS.get(word, set())
+
+    def fits(n):  # the next n words say the call word
+        said = " ".join(t for t, _ in toks[i:i + n])
+        return said == word or said in heard or (
+            n == k and difflib.SequenceMatcher(None, said, word).ratio() >= 0.75) or (
+            n == k + 1 and "".join(t for t, _ in toks[i:i + n]) == word.replace(" ", ""))  # "an gel"
+    i, skipped = 0, 0
+    while i < len(toks) and skipped < 4:
+        t = toks[i][0]
+        if fits(k) or fits(k + 1):
+            break
+        # fillers, and stutters: the start of the call word said first ("a-angel", "an angel", "ang angel")
+        if (t in FILLER and t not in want) or (want[0].startswith(t) and t != want[0]):
+            i, skipped = i + 1, skipped + 1
+            continue
+        return None
+    for n in (k, k + 1, k + 2):
+        if i + n <= len(toks) and fits(n):
+            end = i + n
+            while end + k <= len(toks) and " ".join(t for t, _ in toks[end:end + k]) == word:
+                end += k  # "angel angel, open spotify"
+            return text[toks[end - 1][1]:].lstrip(" ,.;:!?-").strip()
     return None
 
 
 def strip_call(text, word):
     """The command after the call word ('Jarvis, open Spotify' -> 'open Spotify'), '' for
-    the call word alone, None if the phrase doesn't start with it. Near misses count
-    ('Jarvus'), fillers before it are skipped ('hey jarvis…'); the command keeps its capitals."""
-    word = (word or "computer").strip().lower()
-    if word == "computer":  # the built-in one knows its mishearings ("commuter", "compute her"…)
-        m = re.match(r"\W*(?:(?:hey|hi|ok|okay|yo|so)\W+)*" + WAKE + r"\W*", text, re.I)
-        return text[m.end():].strip() if m else None
-    want = " ".join(re.findall(r"[a-z']+", word))
-    k = len(want.split())
-    toks = [(m.group(0).lower(), m.end()) for m in re.finditer(r"[A-Za-z0-9']+", text)]
-    i = 0
-    while i < len(toks) and toks[i][0] in FILLER and toks[i][0] not in want.split():
-        i += 1
-    if len(toks) < i + k:
-        return None
-    said = " ".join(t for t, _ in toks[i:i + k])
-    if said != want and difflib.SequenceMatcher(None, said, want).ratio() < 0.75:
-        return None
-    return text[toks[i + k - 1][1]:].lstrip(" ,.;:!?-").strip()
+    the call word alone, None if the phrase doesn't start with one. word can hold several,
+    comma-separated ('angel, jarvis'). Near misses count ('Jarvus', 'Angela'), fillers and
+    stutters before it are skipped ('hey jarvis…', 'a-angel…'); the command keeps its capitals."""
+    for w in call_words(word or "angel"):
+        rest = _strip_one(text, w)
+        if rest is not None:
+            return rest
+    return None
 
 
 class Listener:

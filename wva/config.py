@@ -22,7 +22,7 @@ DEFAULTS = {
     "voice_replies": False,  # answers (time, weather…) read out loud as well as shown (opt-in)
     "show_timing": False,    # the pill says how long each command took (opt-in)
     "always_listen": False,  # no key: the mic stays on and acts on phrases starting with the call word (opt-in)
-    "call_word": "computer",
+    "call_word": "angel",    # several are fine, comma-separated: "angel, jarvis"
     "unload_in_games": True,  # a game starts: the speech model leaves graphics memory until you press the key
     "welcome_done": False,   # the welcome window was shown (first start, or once after updating to it)
     "auto_update": True,

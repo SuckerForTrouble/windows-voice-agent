@@ -319,7 +319,7 @@ class App:
         if not self.stt.ready and state.gaming:
             return f"Game mode: press {key}, the model loads back while you talk"
         where = {"vulkan": "GPU", "cpu": "CPU", "cloud": "cloud"}.get(self.stt.backend, "")
-        call = f", or say “{config.get('call_word').title()} …”" if self.listener else ""
+        call = f", or say “{listen.call_words(config.get('call_word'))[0].title()} …”" if self.listener else ""
         return f"Ready: hold {key} and talk{call}" + (f" ({where})" if where else "")
 
     def _ready_again(self):
@@ -420,7 +420,7 @@ class App:
         if rest == "":
             self.follow_until = time.time() + 6
             beep("start")
-            osd.show(f"Listening… (you said “{word.title()}”)", "listen", 6)
+            osd.show("Listening…", "listen", 6)
             return
         self.follow_until = 0.0
         log.info("call word, then: %r", rest)
@@ -458,7 +458,8 @@ class App:
         config.set("always_listen", on)
         self._sync_listener()
         if on:
-            osd.show(f"Always listening: say “{config.get('call_word').title()}” first. The mic stays on; anything "
+            names = " or ".join(f"“{w.title()}”" for w in listen.call_words(config.get("call_word")))
+            osd.show(f"Always listening: say {names} first. The mic stays on; anything "
                      "that doesn't start with the call word is thrown away.", "info", 7)
         else:
             osd.show("Always listening off: push-to-talk only", "info", 3)
@@ -469,14 +470,14 @@ class App:
             word = dialogs.ask("call-word", config.get("call_word"))
             if not word:
                 return
-            word = " ".join(re.findall(r"[a-z']+", word.lower()))
             why = listen.call_word_ok(word)
             if why:
-                self.tray.notify(f"“{word}” can't be the call word: {why}")
+                self.tray.notify(f"Call word not changed: {why}")
                 return
+            word = ", ".join(listen.call_words(word))
             config.set("call_word", word)
             self._ready_again()
-            osd.show(f"Call word: “{word.title()}”", "ok", 3)
+            osd.show(f"Call word{'s' if ',' in word else ''}: “{word.title()}”", "ok", 3)
         threading.Thread(target=go, daemon=True).start()
 
     def mic_changed(self):

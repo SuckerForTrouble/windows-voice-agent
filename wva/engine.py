@@ -92,7 +92,40 @@ ALIASES = [
     (r"\bv ?s code\b|\bvisual studio code\b", "vs code"),
     (r"\bo b s\b", "obs"),
     (r"\bn ?video\b", "nvidia"),
+    # words split, run together or near-spelt by the recognisers (2026-10-25)
+    (r"\bin ?crease\b", "increase"), (r"\bde ?crease\b", "decrease"),
+    (r"\b(?:valium|volumn|volum|bolume|wollume|volumes)\b", "volume"),
+    (r"\b(?:lauder|lowder)\b", "louder"), (r"\b(?:quitter|quiter|quietter|quiet her)\b", "quieter"),
+    (r"\b(?:the scored|this court|discored|disc ?ord)\b", "discord"),
+    (r"\b(?:crome|krome|chrom)\b", "chrome"), (r"\b(?:fire fox|firefox's)\b", "firefox"),
+    (r"\bbrave's\b|\bbreve\b(?= (?:browser|and|open|search|new))", "brave"),
+    (r"\b(?:microsoft hedge|hedge browser)\b", "edge"), (r"\bopera g ?x\b", "opera gx"),
+    (r"\bmini ?mi[sz]e\b", "minimize"), (r"\bmaxi ?mi[sz]e\b", "maximize"),
+    (r"\bminimise\b", "minimize"), (r"\bmaximise\b", "maximize"),
+    (r"\bnote pad\b", "notepad"), (r"\btime her\b|\btimmer\b", "timer"),
+    (r"\bhead ?phones?'?s?\b", "headphones"), (r"\bear ?buds?\b", "earbuds"), (r"\bspeaker's\b", "speakers"),
+    (r"\bdown ?load(s|ed)?\b", r"download\1"), (r"\bun[ -]mute\b", "unmute"),
+    (r"^((?:(?:hey|ok|okay|so) )?)(?:moot|mewt)\b", r"\1mute"), (r"^((?:(?:hey|ok|okay|so) )?)oven\b(?= \w)", r"\1open"),
+    (r"\bphone ?link\b|\bfone link\b|\byour phone app\b", "phone link"),
 ]
+# "Increased the volume", "Opened Spotify", "Closing Discord": a command verb heard in
+# another form. Only the first word of a command (natural() below; chains split first), so
+# what gets typed or searched keeps its words ("type I closed it" types "closed").
+VERB_FORMS = {base: base for base in (
+    "open close increase decrease pause play mute unmute skip search switch turn lower raise minimize maximize "
+    "launch start stop scroll type press show hide find take lock restart cancel connect disconnect move snap "
+    "refresh reload zoom copy paste delete save select change enable disable toggle resume rewind call text "
+    "send set mute go").split()}
+for _b in list(VERB_FORMS):
+    _stem = _b[:-1] if _b.endswith("e") else _b
+    _dbl = _b + _b[-1] if re.fullmatch(r".*[^aeiou][aeiou][bdgmnpt]", _b) else _b  # stop -> stopped
+    for _f in (_b + "s", _b + "es", _stem + "ed", _dbl + "ed", _stem + "ing", _dbl + "ing", _b + "d"):
+        VERB_FORMS.setdefault(_f, _b)
+VERB_FORMS.update({"took": "take", "takes": "take", "found": "find", "shut": "shut", "rewound": "rewind",
+                   "minimised": "minimize", "maximised": "maximize", "cancelled": "cancel", "canceled": "cancel",
+                   "copied": "copy", "copies": "copy", "set": "set", "went": "go", "goes": "go", "sent": "send"})
+VERB_RE = re.compile(r"^(" + "|".join(sorted((f for f in VERB_FORMS if VERB_FORMS[f] != f), key=len, reverse=True))
+                     + r")\b")
 ALIASES = [(re.compile(p), r) for p, r in ALIASES]
 
 # The user's own fixes, from tuning.txt (see tuning.py): filled in at start-up.
@@ -218,7 +251,7 @@ def natural(part):
         for p in LEAD:
             t = re.sub("^" + p, "", t)
         t = re.sub(TRAIL, "", t)
-        t = t.strip()
+        t = VERB_RE.sub(lambda m: VERB_FORMS[m.group(1)], t.strip())
     return TUNE_SAY.get(t, t)
 
 

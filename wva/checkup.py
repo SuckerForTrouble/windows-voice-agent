@@ -6,7 +6,7 @@ import os
 import sys
 import time
 
-from . import APP_NAME, __version__, apps, config, hotkey, paths, state, ui
+from . import APP_NAME, __version__, apps, config, hotkey, listen, paths, state, ui
 from .engine import CTX
 
 OK, WARN, FAIL = "ok", "warn", "fail"
@@ -109,7 +109,7 @@ def c_hotkeys():
 
 
 def c_listen():
-    word = config.get("call_word").title()
+    word = "” or “".join(w.title() for w in listen.call_words(config.get("call_word")))
     if not config.get("always_listen"):
         return OK, "Off: push-to-talk only (tray → Always listening to turn it on)", ""
     if state.listening:

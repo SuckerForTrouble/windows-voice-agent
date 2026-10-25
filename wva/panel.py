@@ -10,7 +10,7 @@ import sys
 import threading
 import time
 
-from . import config, osd
+from . import config, listen, osd
 from .osd import _rounded
 
 W, PAD = 360, 16
@@ -206,7 +206,7 @@ class Panel:
         m = {"kind": kind, "status": state.status, "version": __version__, "engine": a._engine_name(),
              "ram": f"{u['ram']} MB RAM" if u.get("ram") else "", "vram": f"{u['vram'] / 1000:.1f} GB VRAM" if u.get("vram") else "",
              "last": f"last {state.timings[-1]['total']:.1f} s" if state.timings else "",
-             "call_word": config.get("call_word").title(), "always_listen": config.get("always_listen"),
+             "call_word": listen.call_words(config.get("call_word"))[0].title(), "always_listen": config.get("always_listen"),
              "paused": state.paused, "voice_replies": config.get("voice_replies"), "sounds": config.get("sounds"),
              "osd": config.get("osd"), "osd_style": config.get("osd_style"),
              "mic": config.get("mic") or "Windows default",
