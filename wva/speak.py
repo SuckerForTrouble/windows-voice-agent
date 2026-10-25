@@ -28,9 +28,10 @@ def _loop():
 _thread = None
 
 
-def say(text):
+def say(text, force=False):
+    """Out loud if voice replies are on, or force (a fullscreen game hides the pill)."""
     global _thread
-    if not config.get("voice_replies") or not text:
+    if not (force or config.get("voice_replies")) or not text:
         return
     if _thread is None:
         _thread = threading.Thread(target=_loop, daemon=True, name="voice")

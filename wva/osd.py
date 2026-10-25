@@ -7,7 +7,14 @@ answers and errors, in one of three styles (tray → Pill on screen, or Settings
   funky     an animated colour gradient, bouncing level bars, playful titles
 
 It never takes focus (the keys you asked for must reach the window you were in) and
-clicks go straight through it. It animates only while it's on screen."""
+clicks go straight through it. It animates only while it's on screen.
+
+Over games: it is a topmost window, put back on top twice a second while it shows (some
+games push themselves above other topmost windows), so it is seen over borderless and
+"fullscreen optimized" games, which is how most games run on Windows 10 and 11. A game in
+true exclusive fullscreen owns the screen: nothing outside the game can draw over it,
+short of hooking into the game, which anti-cheat treats as a cheat (never done here).
+unseen() spots that case, and then answers and notices are said out loud instead."""
 import colorsys
 import ctypes
 import math
@@ -57,6 +64,24 @@ def ui(fn):
 def hide():
     if _thread is not None:
         _q.put(None)
+
+
+_unseen = {"t": 0.0, "v": False}
+
+
+def unseen():
+    """A game in exclusive fullscreen is in front, so the pill can't be seen (Windows' own
+    check, the one that holds back notifications: SHQueryUserNotificationState)."""
+    if sys.platform != "win32":
+        return False
+    if time.time() - _unseen["t"] > 1.0:
+        st = ctypes.c_int(0)
+        try:
+            ok = ctypes.windll.shell32.SHQueryUserNotificationState(ctypes.byref(st)) == 0
+        except Exception:
+            ok = False
+        _unseen.update(t=time.time(), v=ok and st.value == 3)  # QUNS_RUNNING_D3D_FULL_SCREEN
+    return _unseen["v"]
 
 
 _ids = iter(range(1, 1 << 30))
@@ -284,7 +309,12 @@ def _loop():
         # WS_EX_NOACTIVATE | WS_EX_TOOLWINDOW | WS_EX_TRANSPARENT | WS_EX_LAYERED | WS_EX_TOPMOST
         user32.SetWindowLongW(hwnd, -20, style | 0x08000000 | 0x80 | 0x20 | 0x80000 | 0x8)
     pill = Pill(root, canvas, root.winfo_screenwidth())
-    state = {"hide": None, "visible": False}
+    state = {"hide": None, "visible": False, "on_top": 0.0}
+
+    def on_top():
+        if hwnd:
+            ctypes.windll.user32.SetWindowPos(hwnd, -1, 0, 0, 0, 0, 0x1 | 0x2 | 0x10)  # topmost, no move/size/activate
+        state["on_top"] = time.time()
 
     def off():
         root.attributes("-alpha", 0.0)
@@ -317,13 +347,14 @@ def _loop():
                 pill.msg = item
                 render()
                 root.attributes("-alpha", 0.95 if config.get("osd_style") != "minimal" else 0.92)
-                if hwnd:
-                    ctypes.windll.user32.SetWindowPos(hwnd, -1, 0, 0, 0, 0, 0x1 | 0x2 | 0x10)  # topmost, no activate
+                on_top()
                 state["visible"] = True
                 if item["seconds"]:
                     state["hide"] = root.after(int(item["seconds"] * 1000), off)
         except queue.Empty:
             pass
+        if state["visible"] and time.time() - state["on_top"] > 0.5:
+            on_top()  # a game that went topmost after us goes back under
         if state["visible"] and pill.animated():
             render()
             root.after(40, poll)  # ~25 frames a second, only while something moves

@@ -506,6 +506,7 @@ class App:
             except Exception as e:
                 log.exception("%s failed", r.say)
                 errors.append(f"{r.say}: {e}")
+                beep("error")
                 osd.show(f"{r.say}: {e}", "error", 5, title="Problem")
             if i + 1 < len(steps):
                 time.sleep(r.after)
@@ -662,7 +663,7 @@ def main():
         notify=lambda m: osd.show(m, "info", 4 + len(m) / 40) if config.get("osd") else app.tray.notify(m),
         choose=lambda title, items, footer, secs: osd.show("", "pick", secs, title=title, chips=items, footer=footer)
         if config.get("osd") else app.tray.notify(f"{title} " + "  ".join(f"{i}. {n}" for i, (n, _) in enumerate(items, 1))),
-        speak=speak.say,
+        speak=speak.say, unseen=osd.unseen,
         update=lambda: app.check_updates(interactive=True),
     )
     app.tray.run(app.start)
