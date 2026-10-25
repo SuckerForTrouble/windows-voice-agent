@@ -315,6 +315,23 @@ def test_stremio_parse():
     assert parse_show("the movie interstellar") == ("interstellar", None, None)
 
 
+def test_discord_audio():
+    """Discord's sound reaches the call-word detector as 16 kHz mono; the switch is never saved."""
+    import array
+    import math
+
+    from wva import config
+    from wva.loopback import to_16k_mono
+    tone = array.array("f", [v for i in range(48000) for v in (0.5 * math.sin(2 * math.pi * 440 * i / 48000),) * 2])
+    out = array.array("h", to_16k_mono(tone.tobytes(), 2, 48000, True))
+    assert len(out) == 16000 and 15000 < max(out) < 17000, (len(out), max(out))
+    ints = array.array("h", [int(8000 * math.sin(2 * math.pi * 300 * i / 44100)) for i in range(44100)])
+    assert abs(len(to_16k_mono(ints.tobytes(), 1, 44100, False)) // 2 - 16000) <= 1
+    assert not any("discord_audio" in k or "discord_listen" in k for k in config.DEFAULTS), "never saved"
+    src = open(os.path.join(SRC, "app.py"), encoding="utf-8").read()
+    assert not re.search(r"config\.set\([^)]*discord", src), "commands from Discord audio must never be saved"
+
+
 if __name__ == "__main__":
     failed = 0
     for name, fn in list(globals().items()):

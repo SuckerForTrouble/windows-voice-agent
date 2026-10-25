@@ -174,6 +174,9 @@ class Tray:
             M("Start with Windows", lambda: self.app.set_startup(not config.get("start_with_windows")),
               checked=self._checked("start_with_windows")),
             M("Update by itself", self._toggle("auto_update"), checked=self._checked("auto_update")),
+            S,
+            M("⚠ Commands from Discord audio (dangerous, read first)…", lambda: self.app.toggle_discord_audio(),
+              checked=lambda i: state.discord_audio),
         )
 
     def _menu(self):

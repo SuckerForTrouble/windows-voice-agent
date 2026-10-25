@@ -32,6 +32,7 @@ TITLE = {"listen": "Listening", "busy": "Working on it", "ok": "Done", "error": 
 FUNKY = {"listen": ("✦ I'm all ears ✦",), "busy": ("Thinking…", "Hmm, one sec…"),
          "ok": ("Done! ✨", "On it! ⚡", "Boom ✨", "Easy ✓"), "error": ("Huh? ✗", "Say again? ✗"), "info": ("Psst ✦",)}
 KEY = "#010203"          # painted transparent: the rounded corners
+BADGE = {"Discord": "#5865f2"}  # where a command came from, when it wasn't you
 BG, INK, SOFT, LINE, CHIP = "#1b1e27", "#eef0f5", "#9aa2b3", "#2c303b", "#262a39"
 TOP = 18
 _q = queue.Queue()
@@ -46,13 +47,15 @@ def _start():
         _thread.start()
 
 
-def show(text, kind="info", seconds=3.0, title=None, chips=None, footer=None):
+def show(text, kind="info", seconds=3.0, title=None, chips=None, footer=None, source=None):
     """kind: listen | busy | ok | error | info. seconds=0 keeps it up until the next call.
-    title, chips (one per command) and footer are used by the richer styles."""
+    title, chips (one per command) and footer are used by the richer styles. source:
+    "Discord" when the command was heard in Discord's sound (a badge in every style)."""
     if not config.get("osd"):
         return
     _start()
-    _q.put({"text": text, "kind": kind, "seconds": seconds, "title": title, "chips": chips or [], "footer": footer or ""})
+    _q.put({"text": text, "kind": kind, "seconds": seconds, "title": title, "chips": chips or [], "footer": footer or "",
+            "source": source})
 
 
 def ui(fn):
@@ -131,7 +134,8 @@ class Pill:
         f = "Segoe UI" if sys.platform == "win32" else "DejaVu Sans"
         self.font = {"small": tkfont.Font(family=f, size=9), "body": tkfont.Font(family=f, size=10),
                      "text": tkfont.Font(family=f, size=12), "title": tkfont.Font(family=f, size=11, weight="bold"),
-                     "funky": tkfont.Font(family=f, size=13, weight="bold")}
+                     "funky": tkfont.Font(family=f, size=13, weight="bold"),
+                     "badge": tkfont.Font(family=f, size=8, weight="bold")}
         self.msg = None
         self.t0 = time.time()
         self.funky_title = ""
@@ -150,6 +154,19 @@ class Pill:
             return self._funky(c, m)
         return self._minimal(c, m)
 
+    def _badge(self, c, x, y, m, anchor="w"):
+        """'FROM DISCORD' in a coloured tag at (x, y); returns its width (0 without a source)."""
+        src = m.get("source")
+        if not src:
+            return 0
+        label = f"FROM {src.upper()}"
+        f = self.font["badge"]
+        w = f.measure(label) + 14
+        x0 = x - w if anchor == "e" else x
+        _rounded(c, x0, y - 10, x0 + w, y + 10, 10, fill=BADGE.get(src, ACCENT["info"]))
+        c.create_text(x0 + w / 2, y, text=label, fill="white", font=f)
+        return w
+
     def _line(self, m):
         text = m["text"]
         if m["kind"] == "ok" and m["chips"]:
@@ -163,7 +180,8 @@ class Pill:
         if m["kind"] == "ok":
             text = "✓  " + text + (f"   ·  {m['footer']}" if m["footer"] and config.get("show_timing") else "")
         h, pad = 32, 14
-        w = min(self.screen_w - 40, pad * 2 + 18 + self.font["body"].measure(text))
+        bw = self.font["badge"].measure(f"FROM {m['source'].upper()}") + 22 if m.get("source") else 0
+        w = min(self.screen_w - 40, pad * 2 + 18 + bw + self.font["body"].measure(text))
         _rounded(c, 0, 0, w, h, h / 2, fill=BG, outline=LINE)
         dot = ACCENT.get(m["kind"], ACCENT["info"])
         if m["kind"] == "listen":  # a breathing dot, sized by your voice
@@ -172,7 +190,8 @@ class Pill:
         else:
             r = 4.5
         c.create_oval(pad + 5 - r, h / 2 - r, pad + 5 + r, h / 2 + r, fill=dot, outline="")
-        c.create_text(pad + 18, h / 2, text=text, anchor="w", fill=INK, font=self.font["body"])
+        bw = self._badge(c, pad + 16, h / 2, m)
+        c.create_text(pad + 18 + (bw + 8 if bw else 0), h / 2, text=text, anchor="w", fill=INK, font=self.font["body"])
         return w, h
 
     def _advanced(self, c, m):
@@ -181,7 +200,8 @@ class Pill:
         title = m["title"] or TITLE.get(kind, "")
         y = pad
         c.create_oval(pad, y + 2, pad + 12, y + 14, fill=accent, outline="")
-        c.create_text(pad + 20, y + 8, text=title, anchor="w", fill=INK, font=self.font["title"])
+        tid = c.create_text(pad + 20, y + 8, text=title, anchor="w", fill=INK, font=self.font["title"])
+        self._badge(c, c.bbox(tid)[2] + 10, y + 8, m)
         right = m["footer"]
         if kind == "listen":
             right = f"{time.time() - self.t0:.1f} s · Esc cancels"
@@ -258,6 +278,9 @@ class Pill:
             self.funky_title = random.choice(FUNKY.get(kind, FUNKY["info"]))
         text = self._line(m) if kind != "listen" else "talk to me…"
         w = max(320, min(self.screen_w - 40, self.font["text"].measure(text) + 60))
+        if m.get("source"):  # room for the badge on the left without touching the centred title
+            bw = self.font["badge"].measure(f"FROM {m['source'].upper()}") + 14
+            w = max(w, self.font["funky"].measure(self.funky_title) + 2 * (bw + 30))
         h = 78 if kind != "listen" else 92
         # a moving rainbow, drawn as thin stripes inside the rounded shape
         stripes = 64  # dark enough that white text reads on every colour
@@ -267,6 +290,7 @@ class Pill:
             c.create_rectangle(x0, 0, x0 + w / stripes + 1, h, outline="",
                                fill=_hue(base + 0.18 * math.sin(t * 1.6 + i / stripes * math.tau), 0.72, 0.58))
         _corners(c, w, h, 24)
+        self._badge(c, 18, 16, m)
         c.create_text(w / 2 + 1, 24, text=self.funky_title, fill="#0b0d12", font=self.font["funky"])
         c.create_text(w / 2, 22, text=self.funky_title, fill="white", font=self.font["funky"])
         if kind == "listen":  # bouncing bars that follow your voice

@@ -1,4 +1,5 @@
-"""Small windows the tray opens: "press the key you want" and "paste your API key".
+"""Small windows the tray opens: "press the key you want", "paste your API key", the call
+word, and the warning before commands from Discord audio.
 Each runs as its own short-lived process (WindowsVoiceAgent.exe --dialog …), so it
 never shares a GUI thread with the on-screen pill, and writes its answer to a file."""
 import ctypes
@@ -154,8 +155,50 @@ def call_word(out, current):
     _answer(out, result.get("word"))
 
 
+def discord_audio(out, words, whole_pc=""):
+    """The warning before commands from Discord audio: the switch stays off unless the box
+    is ticked and the red button pressed. Enter / Esc keep it off."""
+    tk, root = _window("Commands from Discord audio")
+    bg, ink, soft, red = "#1d2029", "#e8eaf0", "#a2a9b8", "#e5484d"
+    tk.Label(root, text="⚠  DANGEROUS: read this first", bg=bg, fg=red, font=("Segoe UI", 17, "bold")).pack(anchor="w")
+    tk.Label(root, text=f"Anyone in your Discord call can control THIS PC by saying “{words}, …”", bg=bg, fg=ink,
+             font=("Segoe UI", 12, "bold"), wraplength=520, justify="left").pack(anchor="w", pady=(8, 8))
+    risks = ["Every command works for them, exactly like for you: close apps and games, type text, press any key, "
+             "open websites, shut down or restart the PC.",
+             "Nothing is blocked or filtered. A troll, a soundboard or a video someone streams can do it too.",
+             "Only turn it on in a call with people you trust completely.",
+             "It turns itself off when the voice agent restarts, and is never saved."]
+    if whole_pc:
+        risks.insert(2, "On this Windows version it can't hear Discord alone: it listens to EVERYTHING your PC "
+                        "plays (games, videos, music), so a video saying the call word counts too. Windows 11 fixes that.")
+    for r in risks:
+        tk.Label(root, text="•  " + r, bg=bg, fg=soft, font=("Segoe UI", 10), wraplength=520, justify="left").pack(anchor="w", pady=2)
+    sure = tk.BooleanVar(value=False)
+    tk.Checkbutton(root, text="I understand, and I trust everyone in my Discord calls", variable=sure, bg=bg, fg=ink,
+                   selectcolor="#262a39", activebackground=bg, activeforeground=ink, font=("Segoe UI", 10),
+                   command=lambda: go.config(state="normal" if sure.get() else "disabled")).pack(anchor="w", pady=(14, 8))
+    row = tk.Frame(root, bg=bg)
+    row.pack(fill="x")
+    result = {}
+
+    def on():
+        if sure.get():
+            result["v"] = "on"
+            root.destroy()
+    keep = tk.Button(row, text="Keep it off", command=root.destroy, width=14, font=("Segoe UI", 10))
+    keep.pack(side="right")
+    go = tk.Button(row, text="Turn it on", command=on, width=14, font=("Segoe UI", 10, "bold"), bg=red, fg="white",
+                   activebackground="#c13a3e", activeforeground="white", state="disabled")
+    go.pack(side="right", padx=(0, 8))
+    root.bind("<Return>", lambda e: root.destroy())
+    root.bind("<Escape>", lambda e: root.destroy())
+    keep.focus_force()
+    root.mainloop()
+    _answer(out, result.get("v"))
+
+
 def run(kind, out, *args):
     if kind == "settings":
         from . import settings_window
         return settings_window.run(out, *args)
-    {"pick-key": pick_key, "api-key": api_key, "call-word": call_word}[kind](out, *args)
+    {"pick-key": pick_key, "api-key": api_key, "call-word": call_word, "discord-audio": discord_audio}[kind](out, *args)

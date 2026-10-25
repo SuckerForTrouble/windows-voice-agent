@@ -134,6 +134,26 @@ def selftest(out, stt_model=None, wav=None):
         res["recent_files"] = len(files.recent())
     except Exception as e:  # noqa: BLE001
         res["shortcut"] = f"{type(e).__name__}: {e}"
+    try:  # UI Automation loads (Phone Link's Accept / Decline buttons are pressed through it)
+        from . import phone
+        U, auto = phone._uia()
+        res["ui_automation"] = f"ok: {len(phone._windows(toasts=True))} Phone Link / notification windows"
+    except Exception as e:  # noqa: BLE001
+        res["ui_automation"] = f"{type(e).__name__}: {e}"
+    try:  # the WASAPI interfaces for Discord audio define; capturing needs a sound card (informational)
+        from . import loopback, osd
+        loopback._interfaces()
+        res["loopback"] = {"interfaces": "ok", "process_loopback": loopback.process_loopback_ok(),
+                           "discord": loopback.discord_pid(), "fullscreen_game": osd.unseen()}
+        try:
+            cap = loopback.Capture(None)
+            time.sleep(0.3)
+            res["loopback"]["speakers"] = f"ok: {len(cap.read())} bytes"
+            cap.close()
+        except Exception as e:  # noqa: BLE001
+            res["loopback"]["speakers"] = f"{type(e).__name__}: {e}"
+    except Exception as e:  # noqa: BLE001
+        res["loopback"] = {"interfaces": f"{type(e).__name__}: {e}"}
     from . import audio
     for name, probe in (("sound_devices", lambda: [n for _, n, _ in audio.devices()]), ("app_routing", audio.app_routing_ok)):
         try:  # informational: GitHub's machines have no sound card

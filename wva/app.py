@@ -64,7 +64,8 @@ class App:
         self.last_used = 0.0
         self.told_game = ""
         self.listener = None    # always listening (opt-in)
-        self.follow_until = 0.0  # after the call word alone: the next phrase is the command
+        self.discord = None     # commands from Discord audio (dangerous opt-in, off at every start, never saved)
+        self.follow = {"listen": 0.0, "discord": 0.0}  # after the call word alone: the next phrase is the command
         self.first_run = not paths.CONFIG.exists()
         osd.level_source = lambda: self.rec.level  # the pill's mic meter
 
@@ -220,10 +221,11 @@ class App:
             time.sleep(5)
             try:
                 local = self.stt.backend != "cloud"
-                if config.get("always_listen") and local and not self.stt.ready and not self.stt.error:
-                    self._load()  # always listening needs the model loaded, game or not
+                hearing = config.get("always_listen") or self.discord  # these need the model loaded, game or not
+                if hearing and local and not self.stt.ready and not self.stt.error:
+                    self._load()
                     continue
-                unload = config.get("unload_in_games") and local and not config.get("always_listen")
+                unload = config.get("unload_in_games") and local and not hearing
                 game = usage.game_running() if unload else ""
                 idle = not (self.rec.active or self.busy or self.jobs.qsize())
                 if game:
@@ -320,7 +322,8 @@ class App:
             return f"Game mode: press {key}, the model loads back while you talk"
         where = {"vulkan": "GPU", "cpu": "CPU", "cloud": "cloud"}.get(self.stt.backend, "")
         call = f", or say “{listen.call_words(config.get('call_word'))[0].title()} …”" if self.listener else ""
-        return f"Ready: hold {key} and talk{call}" + (f" ({where})" if where else "")
+        warn = "  ·  ⚠ Discord audio runs commands" if self.discord else ""
+        return f"Ready: hold {key} and talk{call}" + (f" ({where})" if where else "") + warn
 
     def _ready_again(self):
         if state.paused:
@@ -351,8 +354,8 @@ class App:
             mode, pcm, secs, released = self.jobs.get()
             self.busy = True
             try:
-                if mode == "listen":
-                    self._overheard(pcm, secs, released)
+                if mode in ("listen", "discord"):
+                    self._overheard(pcm, secs, released, via=mode)
                     continue
                 waited = time.time()
                 while not self.stt.ready and not self.stt.error and time.time() - waited < 40:
@@ -398,33 +401,34 @@ class App:
         state.listening = bool(self.listener)
         self._ready_again()
 
-    def _phrase(self, pcm):
-        """From the open mic's thread. While a command is still running, new phrases are
-        dropped rather than queued (nobody wants a backlog of overheard talk)."""
+    def _phrase(self, pcm, via="listen"):
+        """From the open mic's thread (via="discord": from Discord's sound). While a command is
+        still running, new phrases are dropped rather than queued (nobody wants a backlog)."""
         if self.jobs.qsize() < 2:
-            self.jobs.put(("listen", pcm, len(pcm) / 32000, time.time()))
+            self.jobs.put((via, pcm, len(pcm) / 32000, time.time()))
 
-    def _overheard(self, pcm, secs, heard_at):
-        """A phrase the open mic caught: acted on only if it starts with the call word.
-        Anything else is dropped here, unseen: no pill, no history, no log of the words."""
-        if not self.stt.ready:
+    def _overheard(self, pcm, secs, heard_at, via="listen"):
+        """A phrase the open mic (or Discord's sound) caught: acted on only if it starts with
+        the call word. Anything else is dropped here, unseen: no pill, no history, no log of the words."""
+        if not self.stt.ready or self.stt.backend == "cloud":  # overheard talk never goes to the cloud
             return
         text = self.stt.transcribe(pcm, language=self._language("agent"))
         word = config.get("call_word")
         rest = listen.strip_call(text, word) if text else None
-        if rest is None and text and time.time() < self.follow_until:
+        if rest is None and text and time.time() < self.follow[via]:
             rest = text  # the command that followed the call word on its own
         if rest is None:
-            log.info("always listening: let %.1fs of speech go", secs)
+            log.info("%s: let %.1fs of speech go", via, secs)
             return
+        source = "Discord" if via == "discord" else None
         if rest == "":
-            self.follow_until = time.time() + 6
+            self.follow[via] = time.time() + 6
             beep("start")
-            osd.show("Listening…", "listen", 6)
+            osd.show("Listening…", "listen", 6, source=source)
             return
-        self.follow_until = 0.0
-        log.info("call word, then: %r", rest)
-        self.run_text(rest, woke=True, took=time.time() - heard_at)
+        self.follow[via] = 0.0
+        log.info("call word (%s), then: %r", via, rest)
+        self.run_text(rest, woke=True, took=time.time() - heard_at, via=via)
 
     def toggle_panel(self):
         from . import panel
@@ -441,6 +445,7 @@ class App:
             if self.listener:
                 self.listener.stop()
                 self.listener = None
+            self._discord_off("paused")
             self.tray.set("loading", "Paused: tray → untick Pause to use it again")
             osd.show("Paused: keys and mic off", "info", 2.5)
         else:
@@ -480,25 +485,69 @@ class App:
             osd.show(f"Call word{'s' if ',' in word else ''}: “{word.title()}”", "ok", 3)
         threading.Thread(target=go, daemon=True).start()
 
+    def toggle_discord_audio(self):
+        """Tray → Commands from Discord audio: what the Discord call plays is listened to for the
+        call word, and those commands run here. Dangerous: a big warning first, off at every
+        start (it's never saved), and nothing is filtered (the user asked for that)."""
+        def go():
+            if self.discord:
+                return self._discord_off()
+            if self.stt.backend == "cloud":
+                return self.tray.notify("Needs a speech model on this PC: with a cloud one, your friends' voices "
+                                        "would be sent to the cloud.")
+            if not self.stt.ready:
+                return self.tray.notify("The speech model isn't loaded yet: try again in a moment.")
+            from . import dialogs, loopback
+            words = " or ".join(w.title() for w in listen.call_words(config.get("call_word")))
+            if dialogs.ask("discord-audio", words, "" if loopback.process_loopback_ok() else "whole-pc") != "on":
+                return
+            lst = loopback.DiscordListener(lambda pcm: self._phrase(pcm, "discord"),
+                                           paused=lambda: self.rec.active or state.paused,
+                                           on_closed=lambda why: self._discord_off(why))
+            try:
+                lst.start()
+            except Exception as e:
+                return self.tray.notify(f"Commands from Discord audio didn't start: {e}")
+            self.discord = lst
+            state.discord_audio = True
+            self._ready_again()
+            log.info("commands from Discord audio: ON (%s)", "whole PC" if lst.whole_pc else "Discord only")
+            osd.show(f"Anyone in your Discord call can now run commands on this PC by saying “{words} …”. "
+                     "Tray → untick it to stop.", "error", 9, title="Discord audio runs commands", source="Discord")
+        threading.Thread(target=go, daemon=True).start()
+
+    def _discord_off(self, why=""):
+        if not self.discord:
+            return
+        self.discord.stop()
+        self.discord = None
+        state.discord_audio = False
+        self.follow["discord"] = 0.0
+        log.info("commands from Discord audio: off (%s)", why or "unticked")
+        self._ready_again()
+        osd.show("Commands from Discord audio: off" + (f" ({why})" if why else ""), "info", 4)
+
     def mic_changed(self):
         if self.listener:  # reopen the always-on mic on the new microphone
             self.listener.stop()
             self.listener = None
             self._sync_listener()
 
-    def run_text(self, text, woke=True, took=None):
+    def run_text(self, text, woke=True, took=None, via=None):
+        """via="discord": heard in Discord's sound, and the pill says so."""
         engine.CTX.raw, engine.CTX.last_target = text, None
         steps, woke = engine.plan(text, woke=woke)
         steps = actions.streamline(steps)
         heard = re.sub(r"\s+", " ", text).strip()
+        source, via = ("Discord", "discord") if via == "discord" else (None, "agent")
         if not steps:
-            history.record(via="agent", heard=heard, clean=engine.clean(text), result="unmatched")
+            history.record(via=via, heard=heard, clean=engine.clean(text), result="unmatched")
             beep("error")
-            osd.show(heard, "error", 3.5, title="Didn't understand", footer="say “what can I say” for ideas")
+            osd.show(heard, "error", 3.5, title="Didn't understand", footer="say “what can I say” for ideas", source=source)
             return
         chips = [(s[:1].upper() + s[1:])[:40] for _, _, s in steps]
         footer = f"{took:.1f} s · {self._engine_name()}" if took is not None else self._engine_name()
-        osd.show(heard, "ok", 2.5, chips=chips, footer=footer)
+        osd.show(heard, "ok", 4 if source else 2.5, chips=chips, footer=footer, source=source)
         errors = []
         for i, (r, groups, _) in enumerate(steps):
             try:
@@ -510,7 +559,7 @@ class App:
                 osd.show(f"{r.say}: {e}", "error", 5, title="Problem")
             if i + 1 < len(steps):
                 time.sleep(r.after)
-        history.record(via="agent", heard=heard, clean=engine.clean(text), steps=[r.say for r, _, _ in steps],
+        history.record(via=via, heard=heard, clean=engine.clean(text), steps=[r.say for r, _, _ in steps],
                        args=[list(g) for _, g, _ in steps], result="error" if errors else "ran", errors=errors or None)
 
     def do(self, target, *args):
@@ -560,6 +609,8 @@ class App:
                 speech.set_api_key(model, key)
             if model == config.get("model") and self.stt.ready:
                 return
+            if model in speech.CLOUD:  # never send what Discord plays to the cloud
+                self._discord_off("a cloud model can't listen to Discord")
             config.set("model", model)
             with self.load_lock:
                 self.stt.stop()
