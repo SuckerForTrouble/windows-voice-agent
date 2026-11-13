@@ -392,7 +392,11 @@ class Whisper:
         self.ready = False
 
     # ------------------------------------------------------------- transcribe
-    can_retry = True  # Whisper can listen again more carefully (beam search, the whole 30 s window)
+    @property
+    def can_retry(self):
+        """Whisper can listen again more carefully (beam search, the whole 30 s window), but only
+        the GPU does it fast enough: on a CPU it took 10 s and more (2026-10-25: 10.9 s, base)."""
+        return self.backend == "vulkan"
 
     def transcribe(self, pcm, language=None, best=False):
         """16-bit mono 16 kHz PCM -> text ('' when nothing was said). best: the second try

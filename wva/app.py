@@ -71,6 +71,10 @@ class App:
         self.listener = None    # always listening (opt-in)
         self.discord = None     # commands from Discord audio (dangerous opt-in, off at every start, never saved)
         self.follow = {"listen": 0.0, "discord": 0.0}  # after the call word alone: the next phrase is the command
+        # Phrases from the open mic / Discord's sound are heard on their own thread: a command still
+        # running (or push-to-talk's) never holds them up, and a backlog drops the oldest, not the newest.
+        self.inbox = listen.Inbox()
+        threading.Thread(target=self._hearer, daemon=True, name="hear").start()
         self.first_run = not paths.CONFIG.exists()
         osd.level_source = lambda: self.rec.level  # the pill's mic meter
         state.reload_stt = self.reload_stt
@@ -388,8 +392,8 @@ class App:
             mode, pcm, secs, released = self.jobs.get()
             self.busy = True
             try:
-                if mode in ("listen", "discord"):
-                    self._overheard(pcm, secs, released, via=mode)
+                if mode == "heard":  # a command after the call word, from the hearing thread
+                    self._run_heard(pcm, released)
                     continue
                 waited = time.time()
                 while not self.stt.ready and not self.stt.error and time.time() - waited < 40:
@@ -441,34 +445,56 @@ class App:
         self._ready_again()
 
     def _phrase(self, pcm, via="listen"):
-        """From the open mic's thread (via="discord": from Discord's sound). While a command is
-        still running, new phrases are dropped rather than queued (nobody wants a backlog)."""
-        if self.jobs.qsize() < 2:
-            self.jobs.put((via, pcm, len(pcm) / 32000, time.time()))
+        """From the open mic's thread (via="discord": from Discord's sound)."""
+        self.inbox.put((via, pcm, time.time()))
+
+    def _hearer(self):
+        while True:
+            via, pcm, at = self.inbox.get()
+            try:
+                self._overheard(pcm, len(pcm) / 32000, at, via)
+            except Exception:
+                log.exception("hearing a phrase failed")
 
     def _overheard(self, pcm, secs, heard_at, via="listen"):
         """A phrase the open mic (or Discord's sound) caught: acted on only if it starts with
         the call word. Anything else is dropped here, unseen: no pill, no history, no log of the words."""
         if not self.stt.ready or self.stt.backend == "cloud":  # overheard talk never goes to the cloud
             return
-        text = self.stt.transcribe(pcm, language=self._language("agent"))
+        t0 = time.time()
+        text = self.stt.transcribe(listen.louder(pcm), language=self._language("agent"))
+        took, waited = time.time() - t0, t0 - heard_at
         word = config.get("call_word")
-        rest = listen.strip_call(text, word) if text else None
-        if rest is None and text and time.time() < self.follow[via]:
-            rest = text  # the command that followed the call word on its own
-        if rest is None:
-            log.info("%s: let %.1fs of speech go", via, secs)
+        got = listen.hear(text, word)
+        if got is None and text and time.time() < self.follow[via]:
+            got = (text, True)  # the command that followed the call word on its own
+        if got is None:
+            log.info("%s: let %.1fs of speech go (%.2fs to hear, %.2fs waiting, %s dropped while busy, "
+                     "call word nearest %.2f)", via, secs, took, waited, self.inbox.dropped, listen.why_not(text, word))
             return
+        rest, sure = got
         source = "Discord" if via == "discord" else None
         if rest == "":
-            self.follow[via] = time.time() + 6
-            beep("start")
-            osd.show("Listening…", "listen", 6, source=source)
+            if sure:
+                self.follow[via] = time.time() + 6
+                beep("start")
+                osd.show("Listening…", "listen", 6, source=source)
             return
         self.follow[via] = 0.0
-        log.info("call word (%s), then: %r", via, rest)
-        retry = (lambda: listen.strip_call(self.stt.transcribe(pcm, language=self._language("agent"), best=True), word)) \
-            if self.stt.can_retry and rest else None
+        log.info("call word (%s%s, %.2fs to hear, %.2fs waiting), then: %r", via, "" if sure else ", near", took, waited, rest)
+        self.jobs.put(("heard", (rest, sure, via, pcm), secs, heard_at))
+
+    def _run_heard(self, job, heard_at):
+        """On the command thread: a near call word only counts when a command follows it."""
+        rest, sure, via, pcm = job
+        if not sure:
+            engine.CTX.raw = rest
+            if not engine.plan(rest, woke=True)[0]:
+                log.info("%s: something like the call word, but no command after it: let it go", via)
+                return
+        word = config.get("call_word")
+        retry = (lambda: (listen.hear(self.stt.transcribe(pcm, language=self._language("agent"), best=True), word)
+                          or ("",))[0]) if self.stt.can_retry and sure else None
         self.run_text(rest, woke=True, took=time.time() - heard_at, via=via, retry=retry)
 
     def toggle_panel(self):
