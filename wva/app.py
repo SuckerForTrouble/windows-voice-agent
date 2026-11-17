@@ -119,7 +119,7 @@ class App:
 
     SETTINGS = ("agent_key", "dictate_key", "model", "always_listen", "call_word", "music_app", "movie_app", "browser",
                 "voice_replies", "sounds", "start_with_windows", "unload_in_games", "auto_update", "dictate_language",
-                "osd", "osd_style")
+                "osd", "osd_style", "mic", "show_timing", "discord_keybinds", "clips")
 
     def _ask_settings(self, first_run):
         import tempfile
@@ -137,6 +137,7 @@ class App:
         """First start (and once after updating to this version): pick keys, model, apps…
         before anything downloads. Closing it keeps the defaults."""
         new = self._ask_settings(first_run=True)
+        (new or {}).pop("_do", None)
         for k, v in (new or {}).items():
             if k in self.SETTINGS and k != "start_with_windows":
                 config.set(k, v)
@@ -152,7 +153,15 @@ class App:
         def go():
             new = self._ask_settings(first_run=False)
             if new:
+                todo = new.pop("_do", [])
                 self.apply_settings(new)
+                for action in todo:  # the window's buttons that aren't settings
+                    if action.startswith("cloud_key:"):
+                        self.set_cloud_key(action.split(":", 1)[1])
+                    elif action == "delete_models":
+                        self.delete_models()
+                    elif action == "discord_audio" and not state.discord_audio:
+                        self.toggle_discord_audio()
         threading.Thread(target=go, daemon=True).start()
 
     def apply_settings(self, new):
@@ -175,6 +184,10 @@ class App:
         for k, v in changed.items():
             if k not in ("agent_key", "dictate_key", "start_with_windows", "model"):
                 config.set(k, v)
+        if "mic" in changed:
+            self.mic_changed()
+        if "dictate_language" in changed:
+            self.check_language()
         if "model" in changed:
             self.set_model(changed["model"])  # downloads it if needed, then loads
         elif "always_listen" in changed or "call_word" in changed:

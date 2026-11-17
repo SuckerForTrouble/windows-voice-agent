@@ -60,26 +60,33 @@ display" / "second screen only", "switch keyboard language".
 The **tray icon** (by the clock, maybe behind the **^** arrow) shows what it's doing:
 🔵 ready · 🔴 listening · 🟠 thinking · ⚪ loading.
 
-## Settings: click the tray icon
+## Settings: all in one window
 
-Click the icon (left or right) and a small **panel** opens above it, Windows 11 style:
-what it's doing and what it uses, switches for **Always listening**, **Pause**, **Spoken answers**
-and **Beeps**, the **pill style**, your **microphone**, the **speech model**, and buttons for
-*What can I say?*, *Settings…* and *Check setup*. Click anywhere else (or Esc) to close it.
-**More options…** at the bottom opens the full menu:
+**Every setting lives in Settings…** (click the tray icon → *Settings…*). One page, with its
+sections on the left: **Talking** (the keys or a mouse side button, always listening and its call
+words, the microphone, what the typing key types), **Speech model** (Parakeet, Best, Balanced,
+Fast, or cloud with your own API key; delete models you don't use), **Pill on screen** (Off,
+Minimal, Advanced, Funky or **Island**, and the timing), **Your apps** (what "play …", "watch …",
+"open browser" and "clip that" use), **Extras** (spoken answers, beeps, start with Windows, free
+the GPU in games, update by itself, Discord keybinds) and **Careful** (commands from Discord audio).
+
+Click the tray icon for a small **panel** with what it's doing, two shortcuts (**Always listening**
+and **Pause**) and buttons for *What can I say?*, *Settings…* and *Check setup*. Right-click for
+the menu, which has the same shortcuts and Help.
 
 Out of the box it's the light setup: push-to-talk, the pill at the top of the screen, and beeps.
-Everything else is off until you tick it.
+Everything else is off until you turn it on.
+
+**The pill** fades and slides in, and moves at 60 frames a second only while it's on screen: level
+bars while you talk, a spinner while it works, a check or "!" that pops in. **Island** is a black
+liquid-glass capsule that springs open to fit what it says and shrinks back before it goes. Every
+style fits 1280×720 and 1080p screens at 125 % / 150 % scaling: long text is cut with "…".
 
 | Menu | What's there |
 |---|---|
-| **Settings…** | The same window as on the first start: talk keys (or a mouse side button), speech model, pill style, **your apps** (what "play …" uses: Spotify, YouTube Music or YouTube; what "watch …" uses: Stremio, Netflix or Prime Video; which browser "open browser" opens), always listening and its call word, and the extras. |
+| **Settings…** | Everything (above). |
 | **Pause for now** | Keys and mic off until you untick it (a competitive game that wants F9, a meeting). |
 | **Always listening** | No key: say your **call word** first ("Angel, open Spotify"). Several work, with commas: "Angel, Jarvis". The mic stays on, and anything that doesn't start with a call word is thrown away unseen (needs a model on your PC, not cloud; **Parakeet** answers fastest). |
-| **Pill on screen** | Off, Minimal, Advanced (mic meter and timing) or Funky. |
-| **Speech model** | **Parakeet** (fastest: about a tenth of a second per command, even without a GPU; English) and **Best / Balanced / Fast** (Whisper; Best also does Hindi typing), each with its memory use and download size. The top line shows what the one in use *really* uses on your PC, and how long your last command took. Also **cloud** speech (Groq or OpenAI, your own API key, stored encrypted; your recordings go to them), and **Delete unused models**. |
-| **Microphone** | Pick which mic it listens to. |
-| **More options** | Push-to-talk keys, call words, typing language (**Hindi**), spoken answers, beeps, timing in the pill, **free the GPU while a game runs** (on: the model steps out of graphics memory while a game runs and loads back while you talk), Discord keybinds, clips with NVIDIA or Xbox, start with Windows, update by itself, and **commands from Discord audio** (dangerous, see below). |
 | **Help** | Check my setup, teach it your voice (the AI trick below), check for updates, logs. |
 
 Talk normally. "Can you open YouTube and search for lofi beats please" works. So does

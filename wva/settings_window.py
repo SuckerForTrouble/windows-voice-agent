@@ -1,13 +1,19 @@
 """The welcome window (first start, before the speech model downloads) and, later, the
-Settings window (tray → Settings…). One page, Windows 11-style: switches, cards you
-click, a few plain words each. Runs as its own process (dialogs.ask("settings", …))
-and returns the settings chosen; the app applies them."""
+Settings window (tray → Settings…): every setting, in one place. One page, Windows
+11-style, with a list of its sections on the left that jumps to each: switches, cards
+you click, a few plain words each. The tray menu and the panel only have shortcuts
+(pause, always listening) and a way here.
+
+Runs as its own process (dialogs.ask("settings", …)) and returns the settings chosen;
+the app applies them. Things that are actions rather than settings (set a cloud API
+key, delete unused models, the Discord-audio warning) save and close, and come back
+in "_do" for the app to run."""
 import ctypes
 import json
 import sys
 
 from . import hotkey, listen
-from .stt import MODELS, PARAKEET
+from .stt import CLOUD, MODELS, PARAKEET
 
 BG, CARD, CARD_HI, INK, SOFT, LINE, ACCENT, WARN_BG = (
     "#16181f", "#20232d", "#2a2e3b", "#eef0f5", "#9aa2b3", "#2e3240", "#8b95ff", "#3a2a1c")
@@ -19,7 +25,12 @@ MODEL_CARDS = [  # id, title, line under it
     ("small.en-q5_1", "Balanced", "Lighter, for weaker GPUs."),
     ("base.en-q5_1", "Fast", "Smallest download, least accurate."),
 ]
-PILLS = [("off", "Off"), ("minimal", "Minimal"), ("advanced", "Advanced"), ("funky", "Funky")]
+PILLS = [("off", "Off", "Nothing on screen"), ("minimal", "Minimal", "A slim line, gone fast"),
+         ("advanced", "Advanced", "A card with a mic meter and timing"), ("funky", "Funky", "Colours and bouncing bars"),
+         ("island", "Island", "A glass capsule that morphs open, like a phone's island")]
+TYPING = [("en", "English"), ("hi", "Hindi"), ("auto", "Detect it")]
+CLIPS = [("nvidia", "NVIDIA app (Alt+F10)"), ("xbox", "Xbox Game Bar")]
+SECTIONS = ["Talking", "Speech model", "Pill on screen", "Your apps", "Extras", "Careful"]
 MUSIC = [("spotify", "Spotify"), ("youtube_music", "YouTube Music"), ("youtube", "YouTube")]
 MOVIES = [("stremio", "Stremio"), ("netflix", "Netflix"), ("prime", "Prime Video")]
 BROWSERS = [("", "Windows default"), ("chrome", "Chrome"), ("edge", "Edge"), ("firefox", "Firefox"), ("brave", "Brave")]
@@ -28,7 +39,11 @@ EXTRAS = [("voice_replies", "Spoken answers", "Hear the time, weather… as well
           ("start_with_windows", "Start with Windows", "Ready as soon as you log in"),
           ("unload_in_games", "Free the GPU in games", "The model steps out while a game runs (not with always listening)"),
           ("auto_update", "Update by itself", "New versions install quietly"),
-          ("hindi", "Type in Hindi", "The typing key writes Hindi (needs the Best model)")]
+          ("discord_keybinds", "Discord keybinds", "Mute and deafen inside games without switching to Discord "
+                                                   "(set the same keys in Discord → Settings → Keybinds first)")]
+KEYS = ("agent_key", "dictate_key", "model", "always_listen", "music_app", "movie_app", "browser", "voice_replies", "sounds",
+        "start_with_windows", "unload_in_games", "auto_update", "mic", "dictate_language", "show_timing",
+        "discord_keybinds", "clips")
 
 
 class Window:
@@ -36,22 +51,29 @@ class Window:
         import tkinter as tk
         self.tk, self.cur, self.first = tk, dict(current), first_run
         self.v = dict(current)
-        self.v["hindi"] = current.get("dictate_language") == "hi"
         self.v["pill"] = current.get("osd_style", "minimal") if current.get("osd", True) else "off"
+        self.v.setdefault("dictate_language", "en")
+        self.v.setdefault("clips", "nvidia")
+        self.anchors = {}
+        self.todo = []
         self.result = None
         self.capturing = None
         root = self.root = tk.Tk()
         root.title("Windows Voice Agent" + ("" if first_run else ": Settings"))
         root.configure(bg=BG)
-        root.geometry("760x720")
-        root.minsize(620, 480)
+        root.geometry("900x740")
+        root.minsize(700, 480)
         self._modern()
         self.f = {"h1": (FONT, 20, "bold"), "h2": (FONT, 13, "bold"), "body": (FONT, 10), "small": (FONT, 9),
                   "card": (FONT, 11, "bold"), "key": (FONT, 12, "bold")}
-        # a scrolling page
+        self._footer()  # (packed first, so it keeps its place at the bottom)
+        # the sections on the left, a scrolling page on the right
         outer = tk.Frame(root, bg=BG)
         outer.pack(fill="both", expand=True)
-        canvas = tk.Canvas(outer, bg=BG, highlightthickness=0)
+        self.nav = tk.Frame(outer, bg="#11131a", padx=10, pady=18, width=170)
+        self.nav.pack(side="left", fill="y")
+        self.nav.pack_propagate(False)
+        canvas = self.canvas = tk.Canvas(outer, bg=BG, highlightthickness=0)
         bar = tk.Scrollbar(outer, orient="vertical", command=canvas.yview)
         canvas.configure(yscrollcommand=bar.set)
         bar.pack(side="right", fill="y")
@@ -64,7 +86,7 @@ class Window:
         root.bind_all("<Button-4>", lambda e: canvas.yview_scroll(-3, "units"))
         root.bind_all("<Button-5>", lambda e: canvas.yview_scroll(3, "units"))
         self._build()
-        self._footer()
+        self._navigation()
         root.bind("<KeyPress>", self._key)
 
     def _modern(self):
@@ -78,9 +100,68 @@ class Window:
             pass
 
     # ------------------------------------------------------------- small widgets
+    def _navigation(self):
+        """The section list on the left: a click scrolls the page to that section."""
+        tk = self.tk
+        tk.Label(self.nav, text="Settings", bg="#11131a", fg=INK, font=self.f["h2"], anchor="w").pack(fill="x", pady=(0, 10))
+        for name in SECTIONS:
+            if name not in self.anchors:
+                continue
+            b = tk.Label(self.nav, text=name, bg="#11131a", fg=SOFT, font=self.f["body"], anchor="w", padx=10, pady=7,
+                         cursor="hand2")
+            b.pack(fill="x", pady=1)
+            b.bind("<Enter>", lambda e, w=b: w.configure(bg=CARD, fg=INK))
+            b.bind("<Leave>", lambda e, w=b: w.configure(bg="#11131a", fg=SOFT))
+            b.bind("<Button-1>", lambda e, n=name: self._jump(n))
+
+    def _jump(self, name):
+        self.root.update_idletasks()
+        total = max(1, self.page.winfo_height())
+        self.canvas.yview_moveto(max(0.0, (self.anchors[name].winfo_y() - 8) / total))
+
+    def _section(self, name, sub=None):
+        self._h2(name, sub)
+        self.anchors[name] = self._last_h2
+
+    def _link(self, parent, text, action, bg=BG, fg=ACCENT):
+        b = self.tk.Label(parent, text=text, bg=bg, fg=fg, font=self.f["small"], cursor="hand2")
+        b.bind("<Button-1>", lambda e: action())
+        return b
+
+    def _do(self, action):
+        """An action that isn't a setting: save what's chosen, close, and let the app run it."""
+        self.todo.append(action)
+        self._save()
+
+    def _dropdown(self, label, options, key):
+        """A list to pick from (microphones): (value, shown) each."""
+        from tkinter import ttk
+        tk = self.tk
+        row = tk.Frame(self.page, bg=BG)
+        row.pack(fill="x", pady=4)
+        tk.Label(row, text=label, bg=BG, fg=INK, font=self.f["body"], width=16, anchor="w").pack(side="left")
+        shown = [s for _, s in options]
+        st = ttk.Style(self.root)
+        try:
+            st.theme_use("clam")
+        except Exception:
+            pass
+        st.configure("Dark.TCombobox", fieldbackground=CARD, background=CARD_HI, foreground=INK, arrowcolor=INK,
+                     bordercolor=LINE, lightcolor=CARD, darkcolor=CARD, selectbackground=CARD, selectforeground=INK)
+        st.map("Dark.TCombobox", fieldbackground=[("readonly", CARD)], foreground=[("readonly", INK)])
+        self.root.option_add("*TCombobox*Listbox.background", CARD)
+        self.root.option_add("*TCombobox*Listbox.foreground", INK)
+        self.root.option_add("*TCombobox*Listbox.selectBackground", ACCENT)
+        var = tk.StringVar(value=next((s for v, s in options if v == self.v.get(key)), shown[0]))
+        box = ttk.Combobox(row, textvariable=var, values=shown, state="readonly", width=48, font=self.f["body"],
+                           style="Dark.TCombobox")
+        box.pack(side="left", ipady=3)
+        box.bind("<<ComboboxSelected>>", lambda e: self.v.__setitem__(key, options[shown.index(var.get())][0]))
+
     def _h2(self, text, sub=None):
         tk = self.tk
-        tk.Label(self.page, text=text, bg=BG, fg=INK, font=self.f["h2"], anchor="w").pack(fill="x", pady=(18, 2))
+        self._last_h2 = tk.Label(self.page, text=text, bg=BG, fg=INK, font=self.f["h2"], anchor="w")
+        self._last_h2.pack(fill="x", pady=(18, 2))
         if sub:
             tk.Label(self.page, text=sub, bg=BG, fg=SOFT, font=self.f["body"], anchor="w", justify="left",
                      wraplength=660).pack(fill="x", pady=(0, 8))
@@ -186,7 +267,7 @@ class Window:
                              "Use it at your own risk.", bg=WARN_BG, fg="#ffd8a8", font=self.f["body"], anchor="w",
                      justify="left", wraplength=640).pack(fill="x")
 
-        self._h2("How you talk to it", "Hold the key while you talk. A quick tap works too: tap, talk, tap.")
+        self._section("Talking", "Hold the key while you talk. A quick tap works too: tap, talk, tap.")
         keys = tk.Frame(self.page, bg=BG)
         keys.pack(fill="x")
         self.key_labels = {}
@@ -202,15 +283,13 @@ class Window:
             for text, action in (("Press a new key", lambda m=mode: self._capture(m)),
                                  ("Mouse back", lambda m=mode: self._set_key(m, "mouse4")),
                                  ("Mouse forward", lambda m=mode: self._set_key(m, "mouse5"))):
-                b = tk.Label(links, text=text, bg=CARD, fg=ACCENT, font=self.f["small"], cursor="hand2")
-                b.pack(side="left", padx=(0, 12))
-                b.bind("<Button-1>", lambda e, a=action: a())
+                self._link(links, text, action, bg=CARD).pack(side="left", padx=(0, 12))
         self.key_note = tk.Label(self.page, text="", bg=BG, fg="#f76b15", font=self.f["small"], anchor="w")
         self.key_note.pack(fill="x")
 
         self._row("Always listening", "No key: start with the call word, like “Angel, open Spotify”. The mic stays "
-                  "on; anything that doesn't start with the call word is thrown away.", "always_listen",
-                  on_change=self._call_state)
+                  "on; anything that doesn't start with the call word is thrown away. Parakeet answers fastest.",
+                  "always_listen", on_change=self._call_state)
         cw = tk.Frame(self.page, bg=BG)
         cw.pack(fill="x", pady=(2, 0))
         tk.Label(cw, text="Call words", bg=BG, fg=INK, font=self.f["body"], width=16, anchor="w").pack(side="left")
@@ -221,28 +300,56 @@ class Window:
         self.call_note = tk.Label(cw, text="several: Angel, Jarvis", bg=BG, fg=SOFT, font=self.f["small"])
         self.call_note.pack(side="left", padx=8)
         self._call_state()
+        try:
+            from .recorder import input_devices
+            mics = input_devices()
+        except Exception:
+            mics = []
+        if self.v.get("mic") and self.v["mic"] not in mics:
+            mics.append(self.v["mic"])
+        self._dropdown("Microphone", [("", "Windows default")] + [(m, m) for m in mics], "mic")
+        self._segments("Typing key types", TYPING, "dictate_language")
 
-        self._h2("Speech model", "Turns your voice into text, on your PC. Parakeet is the quickest; pick Best if "
-                 "you want to type in Hindi.")
+        self._section("Speech model", "Turns your voice into text, on your PC. Parakeet is the quickest; pick Best if "
+                      "you want to type in Hindi.")
         cards = [(m, t + (" (recommended)" if m == PARAKEET else ""),
                   f"{line}  ·  {MODELS[m][1]} MB download") for m, t, line in MODEL_CARDS]
-        if self.cur.get("model") not in MODELS:
-            cards.append((self.cur.get("model"), "Keep the cloud model", "Set up in the tray menu"))
+        cards += [(pid, label.split(" (")[0].replace("Cloud: ", "Cloud: "), "Needs an API key; your audio goes to "
+                   f"{label.split(': ')[1].split(' (')[0]}. Never used for always listening.")
+                  for pid, (label, _, _) in CLOUD.items()]
+        if self.cur.get("model") not in MODELS and self.cur.get("model") not in CLOUD:
+            cards.append((self.cur.get("model"), "Keep the current model", ""))
         self._cards(cards, "model")
+        links = tk.Frame(self.page, bg=BG)
+        links.pack(fill="x", pady=(4, 0))
+        for pid, (label, _, _) in CLOUD.items():
+            name = label.split(": ")[1].split(" (")[0]
+            self._link(links, f"Set the {name} API key…", lambda p=pid: self._do(f"cloud_key:{p}")).pack(side="left", padx=(4, 14))
+        self._link(links, "Delete models I don't use", lambda: self._do("delete_models")).pack(side="left", padx=4)
 
-        self._h2("The pill on screen", "Shows what it heard and what it did, at the top of the screen.")
-        self._cards([(v, t, d) for (v, t), d in zip(PILLS, ("Nothing on screen", "A slim line, gone fast",
-                                                             "A card with a mic meter and timing",
-                                                             "Colours and bouncing bars"))], "pill", columns=4)
+        self._section("Pill on screen", "Shows what it heard and what it did, at the top of the screen.")
+        self._cards(PILLS, "pill", columns=3)
+        self._row("Show how long each command took", "The time and the model, on the pill", "show_timing")
 
-        self._h2("Your apps", "Which app it uses when you don't name one.")
+        self._section("Your apps", "Which app it uses when you don't name one.")
         self._segments("“Play …”", MUSIC, "music_app")
         self._segments("“Watch …”", MOVIES, "movie_app")
         self._segments("“Open browser”", BROWSERS, "browser")
+        self._segments("“Clip that”", CLIPS, "clips")
 
-        self._h2("Extras", "All off-by-default things live here too.")
+        self._section("Extras", "Small things to turn on or off.")
         for key, title, sub in EXTRAS:
             self._row(title, sub, key)
+
+        self._section("Careful", "Not saved: off again every time the app starts.")
+        row = tk.Frame(self.page, bg=WARN_BG, padx=16, pady=12)
+        row.pack(fill="x", pady=3)
+        tk.Label(row, text="Commands from Discord audio", bg=WARN_BG, fg="#ffd8a8", font=self.f["card"], anchor="w").pack(fill="x")
+        tk.Label(row, text="Anyone in your Discord call could run commands on this PC by saying the call word. "
+                           "Read the warning first.", bg=WARN_BG, fg="#e8c9a0", font=self.f["small"], anchor="w",
+                 justify="left", wraplength=560).pack(fill="x")
+        self._link(row, "Read the warning and turn it on…", lambda: self._do("discord_audio"), bg=WARN_BG,
+                   fg="#ffb366").pack(anchor="w", pady=(6, 0))
 
     def _footer(self):
         tk = self.tk
@@ -311,14 +418,12 @@ class Window:
             if why:
                 self.call_note.configure(text=why, fg="#f76b15")
                 return
-        out = {k: self.v[k] for k in ("agent_key", "dictate_key", "model", "always_listen", "music_app", "movie_app",
-                                     "browser", "voice_replies", "sounds", "start_with_windows", "unload_in_games",
-                                     "auto_update")}
+        out = {k: self.v[k] for k in KEYS if k in self.v}
         out["call_word"] = word or self.cur.get("call_word", "angel")
-        out["dictate_language"] = "hi" if self.v.get("hindi") else ("en" if self.cur.get("dictate_language") == "hi"
-                                                                      else self.cur.get("dictate_language", "en"))
         out["osd"] = self.v["pill"] != "off"
         out["osd_style"] = self.v["pill"] if self.v["pill"] != "off" else self.cur.get("osd_style", "minimal")
+        if self.todo:
+            out["_do"] = list(self.todo)
         self.result = out
         self.root.destroy()
 

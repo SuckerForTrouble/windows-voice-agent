@@ -86,11 +86,9 @@ def draw(c, m, on, mic_open=False):
     text(PAD, y + 8, "  ·  ".join(b for b in bits if b), "small", SOFT)
     y += 28
 
-    # four switch tiles --------------------------------------------------------
+    # two shortcuts (every setting is in Settings…) ------------------------------
     tiles = [("listen", "Always listening", f"say “{m['call_word']}”", m["always_listen"]),
-             ("pause", "Pause", "keys and mic off", m["paused"]),
-             ("voice", "Spoken answers", "read answers out", m["voice_replies"]),
-             ("beeps", "Beeps", "start / stop sounds", m["sounds"])]
+             ("pause", "Pause", "keys and mic off", m["paused"])]
     tw, th, gap = (W - 2 * PAD - 10) / 2, 62, 10
     for i, (action, title, sub, on_) in enumerate(tiles):
         x0, y0 = PAD + (i % 2) * (tw + gap), y + (i // 2) * (th + gap)
@@ -100,45 +98,7 @@ def draw(c, m, on, mic_open=False):
         icon(c, action, x0 + 24, y0 + th / 2, ink, g)
         text(x0 + 46, y0 + 23, title, "bold", ink, tag=g)
         text(x0 + 46, y0 + 42, sub if len(sub) < 22 else sub[:20] + "…", "small", soft, tag=g)
-    y += 2 * th + gap + 18
-
-    # pill style ---------------------------------------------------------------
-    text(PAD, y, "Pill on screen", "small", SOFT)
-    y += 12
-    styles = [("off", "Off"), ("minimal", "Minimal"), ("advanced", "Advanced"), ("funky", "Funky")]
-    cur = m["osd_style"] if m["osd"] else "off"
-    sw = (W - 2 * PAD) / len(styles)
-    _rounded(c, PAD, y, W - PAD, y + 32, 10, fill=CARD)
-    for i, (sid, label) in enumerate(styles):
-        x0 = PAD + i * sw
-        if sid == cur:
-            g = press(x0 + 3, y + 3, x0 + sw - 3, y + 29, f"pill:{sid}", fill=ACCENT, hover="#a3abff", r=8)
-            text(x0 + sw / 2, y + 16, label, "bold", ON_INK, "center", g)
-        else:
-            g = press(x0 + 3, y + 3, x0 + sw - 3, y + 29, f"pill:{sid}", fill=CARD, hover=HOVER, r=8)
-            text(x0 + sw / 2, y + 16, label, "body", INK, "center", g)
-    y += 44
-
-    # microphone and speech model rows -------------------------------------------
-    for action, label, value, right in (("mic", "Microphone", m["mic"], None),
-                                        ("model", "Speech model", m["model"], "Change…")):
-        g = press(PAD, y, W - PAD, y + 46, action)
-        text(PAD + 14, y + 14, label, "small", SOFT, tag=g)
-        value = value if len(value) <= 40 else value[:38] + "…"
-        text(PAD + 14, y + 31, value, "bold", tag=g)
-        if right:
-            text(W - PAD - 14, y + 23, right, "small", ACCENT, "e", g)
-        else:
-            chevron(c, W - PAD - 20, y + 23, mic_open, ACCENT, g)
-        y += 52
-        if action == "mic" and mic_open:
-            for name in m.get("mics", []):
-                sel = name == m["mic"]
-                g = press(PAD + 12, y, W - PAD, y + 30, f"mic:{name}", fill=HOVER if sel else BG, hover=HOVER, r=8)
-                text(PAD + 26, y + 15, ("●  " if sel else "    ") + (name if len(name) <= 42 else name[:40] + "…"),
-                     "body", INK if sel else SOFT, tag=g)
-                y += 32
-            y += 6
+    y += th + 18
 
     # buttons ------------------------------------------------------------------
     y += 4
@@ -153,8 +113,7 @@ def draw(c, m, on, mic_open=False):
     # footer -------------------------------------------------------------------
     c.create_line(PAD, y, W - PAD, y, fill=LINE)
     y += 8
-    g = press(PAD - 6, y, PAD + 120, y + 28, "more", fill=BG, hover=CARD, r=8)
-    text(PAD + 2, y + 14, "More options…", "small", ACCENT, tag=g)
+    text(PAD + 2, y + 14, f"{m['engine']}  ·  {m['mic']}"[:46], "small", SOFT)
     g = press(W - PAD - 60, y, W - PAD + 6, y + 28, "quit", fill=BG, hover="#3a2420", r=8)
     text(W - PAD - 27, y + 14, "Quit", "small", DANGER, "center", g)
     y += 30
@@ -263,27 +222,8 @@ class Panel:
             self.later(a.toggle_listen)
         elif action == "pause":
             self.later(a.toggle_pause)
-        elif action in ("voice", "beeps"):
-            key = {"voice": "voice_replies", "beeps": "sounds"}[action]
-            config.set(key, not config.get(key))
-            self.render()
-        elif action.startswith("pill:"):
-            style = action[5:]
-            config.set("osd", style != "off")
-            if style != "off":
-                config.set("osd_style", style)
-                osd.show(f"Pill style: {osd.STYLES[style]}", "ok", 2.5)
-            self.render()
-        elif action == "mic":
-            self.mic_open = not self.mic_open
-            self.render()
-        elif action.startswith("mic:"):
-            name = action[4:]
-            config.set("mic", "" if name == "Windows default" else name)
-            self.mic_open = False
-            self.later(a.mic_changed)
         else:  # these open something else: the panel steps aside
             self.close()
             {"model": a.open_settings, "settings": a.open_settings,
              "guide": lambda: a.do("guide.open_guide"), "checkup": lambda: a.do("checkup.run_and_open"),
-             "more": a.tray.show_menu, "quit": a.quit}[action]()
+             "quit": a.quit}[action]()
