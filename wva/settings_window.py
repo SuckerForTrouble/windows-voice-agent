@@ -27,7 +27,7 @@ MODEL_CARDS = [  # id, title, line under it
 ]
 PILLS = [("off", "Off", "Nothing on screen"), ("minimal", "Minimal", "A slim line, gone fast"),
          ("advanced", "Advanced", "A card with a mic meter and timing"), ("funky", "Funky", "Colours and bouncing bars"),
-         ("island", "Island", "A glass capsule that morphs open, like a phone's island")]
+         ("island", "Island", "Liquid glass like Apple's: clear, morphs open to fit")]
 TYPING = [("en", "English"), ("hi", "Hindi"), ("auto", "Detect it")]
 CLIPS = [("nvidia", "NVIDIA app (Alt+F10)"), ("xbox", "Xbox Game Bar")]
 SECTIONS = ["Talking", "Speech model", "Pill on screen", "Your apps", "Extras", "Careful"]

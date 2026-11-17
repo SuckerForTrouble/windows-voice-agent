@@ -78,8 +78,12 @@ Out of the box it's the light setup: push-to-talk, the pill at the top of the sc
 Everything else is off until you turn it on.
 
 **The pill** fades and slides in, and moves at 60 frames a second only while it's on screen: level
-bars while you talk, a spinner while it works, a check or "!" that pops in. **Island** is a black
-liquid-glass capsule that springs open to fit what it says and shrinks back before it goes. Every
+bars while you talk, a spinner while it works, a check or "!" that pops in. **Island** is liquid
+glass like Apple's: clear, with what's behind it showing through, softly frosted and bent at the rim,
+light along the edge and a soft shadow; the words turn dark over a bright screen and white over a dark
+one. It springs open to fit what it says and shrinks back before it goes. To do that it reads the
+strip of screen right behind it, in memory only (never saved or sent), and it keeps itself out of
+screen capture, so screenshots and recordings don't show the Island pill. Every
 style fits 1280×720 and 1080p screens at 125 % / 150 % scaling: long text is cut with "…".
 
 | Menu | What's there |

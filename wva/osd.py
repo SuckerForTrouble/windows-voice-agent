@@ -5,8 +5,10 @@ answers and errors, in one of three styles (tray → Pill on screen, or Settings
   advanced  a card: title, what it heard, a chip per command, timing and model,
             a live mic meter while you talk
   funky     an animated colour gradient, bouncing level bars, playful titles
-  island    a glassy black capsule that springs open from a small pill to fit what it
-            says, and shrinks back before it goes (like a phone's "dynamic island")
+  island    liquid glass like Apple's (liquid.py): clear, what's behind it showing through,
+            bent at the rim, lit along the edge; it springs open from a small pill to fit what
+            it says and shrinks back before it goes. Where Windows can't make the glass window
+            it's drawn as black glass instead.
 
 Every style fades and slides in and out, and anything that moves is drawn at ~60 frames
 a second, only while it's on screen. The mic level is smoothed (quick to rise, slow to
@@ -565,11 +567,30 @@ def _loop():
         # WS_EX_NOACTIVATE | WS_EX_TOOLWINDOW | WS_EX_TRANSPARENT | WS_EX_LAYERED | WS_EX_TOPMOST
         user32.SetWindowLongW(hwnd, -20, style | 0x08000000 | 0x80 | 0x20 | 0x80000 | 0x8)
     pill = Pill(root, canvas, root.winfo_screenwidth())
-    state = {"hide": None, "visible": False, "on_top": 0.0, "alpha": 0.0, "want": 0.0, "geo": None}
+    state = {"hide": None, "visible": False, "on_top": 0.0, "alpha": 0.0, "want": 0.0, "geo": None,
+             "back": None, "back_at": 0.0, "glass": None, "glass_failed": False}
+
+    def glass():
+        """The liquid-glass window for the Island style (Windows), made the first time it's needed;
+        None elsewhere, or if Windows wouldn't make it (then the island is drawn in black glass)."""
+        if config.get("osd_style") != "island" or sys.platform != "win32" or state["glass_failed"]:
+            return None
+        if state["glass"] is None:
+            try:
+                from . import liquid
+                state["glass"] = liquid.Window()
+            except Exception:
+                import logging
+                logging.getLogger("wva.osd").exception("liquid glass unavailable, using the black island")
+                state["glass_failed"] = True
+                return None
+        return state["glass"]
 
     def on_top():
         if hwnd:
             ctypes.windll.user32.SetWindowPos(hwnd, -1, 0, 0, 0, 0, 0x1 | 0x2 | 0x10)  # topmost, no move/size/activate
+        if state["glass"] is not None:
+            state["glass"].on_top()
         state["on_top"] = time.time()
 
     def off():
@@ -579,11 +600,48 @@ def _loop():
 
     def gone():
         root.attributes("-alpha", 0.0)
-        state.update(visible=False, alpha=0.0, geo=None)
+        if state["glass"] is not None:
+            state["glass"].hide()
+        state.update(visible=False, alpha=0.0, geo=None, back=None)
         pill.msg, pill.closing = None, False
         pill.size, pill.vel = list(COMPACT), [0.0, 0.0]
 
+    def render_glass(g):
+        """One frame of liquid glass: what's behind the pill (read every 100 ms), bent, frosted
+        and lit by liquid.render, put on screen with per-pixel alpha."""
+        from . import liquid
+        m, S = pill.msg, pill.S
+        width, text, right = liquid.layout(m, pill.room, config.get("show_timing"))
+        pill.target = list(liquid.COMPACT) if pill.closing else [width, liquid.H]
+        pill._spring()
+        # (the spring overshoots a little: kept inside the strip that's read behind it)
+        cw = min(pill.room, max(liquid.COMPACT[1], pill.size[0]))
+        ch = min(liquid.H + 3, max(24.0, pill.size[1]))
+        M = int(round(liquid.MARGIN * S))
+        W, Hh = int(round(cw * S)) + 2 * M, int(round(ch * S)) + 2 * M
+        a = min(1.0, state["alpha"])
+        y = int(TOP - M + (liquid.H * S - ch * S) / 2 - SLIDE * S * (1 - a) ** 2)
+        x = int((pill.screen_w - W) // 2)
+        # the strip behind it, as wide as the pill can get, read again every 100 ms
+        sw = int(min(pill.screen_w, pill.room * S + 2 * M))
+        sx = int((pill.screen_w - sw) // 2)
+        sh = int((liquid.H + 6) * S) + 2 * M + int(SLIDE * S) + 4
+        sy = int(TOP - M - SLIDE * S)
+        if (state["back"] is None or time.time() - state["back_at"] > 0.1) and g.can_read_behind():
+            state["back"], state["back_at"] = g.backdrop(sx, sy, sw, sh), time.time()
+        back = state["back"].crop((x - sx, y - sy, x - sx + W, y - sy + Hh))
+        open_ = (cw - liquid.COMPACT[0]) / max(1.0, pill.target[0] - liquid.COMPACT[0]) if pill.target[0] > liquid.COMPACT[0] else 1.0
+        fade = 0.0 if pill.closing else max(0.0, min(1.0, (open_ - 0.55) / 0.4))
+        img = liquid.render(back, cw * S, ch * S, m, t=_now() - pill.t0, lv=pill.level(), fade=fade, scale=S,
+                            show_timing=config.get("show_timing"), text=text, right=right)
+        g.show(img, x, y, int(255 * a))
+
     def render():
+        g = glass()
+        if g is not None:
+            return render_glass(g)
+        if state["glass"] is not None and state["glass"].shown:
+            state["glass"].hide()  # switched away from the island
         w, h = pill.draw()
         a = state["alpha"] / max(0.01, ALPHA.get(config.get("osd_style"), 0.95))
         y = TOP - SLIDE * (1 - min(1.0, a)) ** 2  # slides down into place as it fades in
@@ -602,7 +660,8 @@ def _loop():
         state["alpha"] += (state["want"] - state["alpha"]) * k
         if not fading():
             state["alpha"] = state["want"]
-        root.attributes("-alpha", max(0.0, state["alpha"]))
+        if glass() is None:  # (the glass window fades by itself)
+            root.attributes("-alpha", max(0.0, state["alpha"]))
 
     def poll():
         try:
@@ -625,7 +684,7 @@ def _loop():
                     pill.t0, pill.funky_title = _now(), ""
                 pill.msg, pill.closing, pill.shown = item, False, _now()
                 pill.stepped = _now()
-                state["want"] = ALPHA.get(config.get("osd_style"), 0.95)
+                state["want"] = 1.0 if glass() is not None else ALPHA.get(config.get("osd_style"), 0.95)
                 if not state["visible"]:
                     on_top()
                 state["visible"] = True
@@ -639,14 +698,15 @@ def _loop():
             return
         if time.time() - state["on_top"] > 0.5:
             on_top()  # a game that went topmost after us goes back under
+        live = glass() is not None  # the glass follows what's behind it, so it's redrawn ~10 times a second anyway
         moving = fading() or pill.animated()
         if fading():
             step_alpha()
         if state["want"] == 0.0 and not fading() and (config.get("osd_style") != "island" or pill.settled()):
             gone()
-        elif moving:
+        elif moving or live:
             render()
-        root.after(FRAME if moving else 60, poll)
+        root.after((33 if live else FRAME) if moving else (100 if live else 60), poll)
 
     root.after(60, poll)
     root.mainloop()

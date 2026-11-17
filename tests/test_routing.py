@@ -400,6 +400,38 @@ def test_everyday_extras():
     assert handy.lang_ok("hello", "Hindi") and not handy.lang_ok("hello", "delhi")
 
 
+def test_liquid_glass():
+    """The Island's liquid glass: right size at every scaling, see-through (it shows what's behind
+    it), dark words over a bright screen and white over a dark one, long text cut to the screen."""
+    try:
+        from PIL import Image
+    except ImportError:
+        return
+    from wva import liquid
+    long = {"kind": "ok", "text": "x", "title": "Open Spotify and search for the interstellar soundtrack by hans zimmer " * 3,
+            "chips": [], "footer": "0.4 s · Parakeet", "source": "Discord", "seconds": 3}
+    for room in (813, 984, 1240):  # 720p at 150 %, 1080p at 150 % / 125 %
+        w, text, right = liquid.layout(long, room, True)
+        assert w <= room and text.endswith("…"), (room, w, text)
+    for scale in (1.0, 1.25, 1.5):
+        msg = {"kind": "ok", "text": "Open Spotify", "title": None, "chips": [], "footer": "", "source": None, "seconds": 3}
+        w, text, right = liquid.layout(msg, 1240 / scale)
+        m = round(liquid.MARGIN * scale)
+        size = (round(w * scale) + 2 * m, round(liquid.H * scale) + 2 * m)
+        for colour, want_dark in (((250, 250, 250), True), ((15, 15, 25), False)):
+            img = liquid.render(Image.new("RGB", size, colour), w * scale, liquid.H * scale, msg, scale=scale, text=text)
+            assert img.size == size, (img.size, size)
+            assert img.getpixel((0, 0))[3] == 0 and img.getpixel((size[0] // 2, size[1] // 2))[3] == 255
+            # the words: the darkest (or lightest) pixels inside the capsule
+            px = [img.getpixel((x, size[1] // 2))[:3] for x in range(m + 50, size[0] // 2)]
+            ink = min(px, key=sum) if want_dark else max(px, key=sum)
+            assert (sum(ink) < 200) if want_dark else (sum(ink) > 600), (colour, ink)
+    # see-through: a red screen behind makes red glass
+    red = liquid.render(Image.new("RGB", size, (220, 30, 30)), w * scale, liquid.H * scale, msg, scale=scale, fade=0)
+    r, g, b, _ = red.getpixel((size[0] // 2, size[1] // 2))
+    assert r > g + 60 and r > b + 60, (r, g, b)
+
+
 def test_call_word():
     from wva.listen import call_word_ok, call_words, strip_call
     cases = [("Jarvis, open Spotify.", "jarvis", "open Spotify."), ("Hey Jarvis open spotify", "jarvis", "open spotify"),
