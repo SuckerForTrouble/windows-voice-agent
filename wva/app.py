@@ -464,6 +464,7 @@ class App:
         t0 = time.time()
         text = self.stt.transcribe(listen.louder(pcm), language=self._language("agent"))
         took, waited = time.time() - t0, t0 - heard_at
+        state.listen_ms, state.listen_dropped = (state.listen_ms + [round(took, 2)])[-30:], self.inbox.dropped
         word = config.get("call_word")
         got = listen.hear(text, word)
         if got is None and text and time.time() < self.follow[via]:

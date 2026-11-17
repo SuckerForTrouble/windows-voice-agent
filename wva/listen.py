@@ -52,14 +52,14 @@ class Segmenter:
         self.active = False
         self.buf = []
         self.run = 0          # speech frames in a row (before) / silent frames in a row (during)
-        self.was = False      # the last frame was loud
+        self.streak = 0       # loud frames in a row
 
     def floor(self):
         return max(self.noise * 3.0, min(400.0, max(40.0, self.noise * 6.0)))
 
     def drop(self):
         """Forget a phrase in progress (push-to-talk took over); keeps the learnt noise level."""
-        self.active, self.buf, self.run, self.was = False, [], 0, False
+        self.active, self.buf, self.run, self.streak = False, [], 0, 0
         self.pre.clear()
 
     def feed(self, frame):
@@ -72,17 +72,17 @@ class Segmenter:
             self.pre.append(frame)
             self.run = self.run + 1 if speech else 0
             if self.run >= self.start_n:  # someone started talking: keep the bit just before too
-                self.active, self.buf, self.run, self.was = True, list(self.pre), 0, True
+                self.active, self.buf, self.run, self.streak = True, list(self.pre), 0, self.run
             return None
         self.buf.append(frame)
-        # A key or mouse click is one loud frame; a spoken sound lasts 60 ms and more. Clicks
-        # don't keep a phrase going, so typing while you talk doesn't hold the command back.
-        self.run = 0 if speech and self.was else self.run + 1
-        self.was = speech
+        # A key or mouse click is loud for one or two frames; a spoken sound lasts 90 ms and more.
+        # Clicks don't keep a phrase going, so typing while you talk doesn't hold the command back.
+        self.streak = self.streak + 1 if speech else 0
+        self.run = 0 if self.streak >= 3 else self.run + 1
         if self.run >= self.end_n or len(self.buf) >= self.max_n:
             n = len(self.buf) - self.run
             phrase = b"".join(self.buf[:len(self.buf) - max(0, self.run - self.keep_n)])
-            self.active, self.buf, self.run, self.was = False, [], 0, False
+            self.active, self.buf, self.run, self.streak = False, [], 0, 0
             self.pre.clear()
             return phrase if n >= self.min_n else None
         return None

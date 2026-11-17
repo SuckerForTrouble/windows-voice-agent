@@ -66,7 +66,7 @@ Everything else is off until you tick it.
 |---|---|
 | **Settings…** | The same window as on the first start: talk keys (or a mouse side button), speech model, pill style, **your apps** (what "play …" uses: Spotify, YouTube Music or YouTube; what "watch …" uses: Stremio, Netflix or Prime Video; which browser "open browser" opens), always listening and its call word, and the extras. |
 | **Pause for now** | Keys and mic off until you untick it (a competitive game that wants F9, a meeting). |
-| **Always listening** | No key: say your **call word** first ("Angel, open Spotify"). Several work, with commas: "Angel, Jarvis". The mic stays on, and anything that doesn't start with a call word is thrown away unseen (needs a model on your PC, not cloud). |
+| **Always listening** | No key: say your **call word** first ("Angel, open Spotify"). Several work, with commas: "Angel, Jarvis". The mic stays on, and anything that doesn't start with a call word is thrown away unseen (needs a model on your PC, not cloud; **Parakeet** answers fastest). |
 | **Pill on screen** | Off, Minimal, Advanced (mic meter and timing) or Funky. |
 | **Speech model** | **Parakeet** (fastest: about a tenth of a second per command, even without a GPU; English) and **Best / Balanced / Fast** (Whisper; Best also does Hindi typing), each with its memory use and download size. The top line shows what the one in use *really* uses on your PC, and how long your last command took. Also **cloud** speech (Groq or OpenAI, your own API key, stored encrypted; your recordings go to them), and **Delete unused models**. |
 | **Microphone** | Pick which mic it listens to. |
@@ -197,6 +197,10 @@ box before the red button works.
   noise: install it, then tray → Microphone → "Microphone (NVIDIA Broadcast)". Also check the right
   mic is picked (tray → Microphone), and do the AI trick above.
 - **It cuts off my last word**: it already keeps listening 0.3 s after you let go. Let go a moment later.
+- **Always listening misses the call word, or answers late**: the setup check's **Speed** line says how
+  long each phrase takes to hear. Every phrase said near the mic goes through the model, so pick
+  **Parakeet** (tray → Speech model): about 0.2 s a phrase, where the big Whisper model can take a second
+  or more. Quiet mics are heard now too (0.1.13), and typing while you talk no longer holds a phrase open.
 - **Commands do nothing inside one particular game**: that game runs as administrator. Right-click
   the Windows Voice Agent shortcut → Run as administrator.
 - **Slow** (the setup check's **Speed** line): it times the model on a sample sentence three times
@@ -228,7 +232,10 @@ to remove them too.
 - What you say is turned into text **on your PC**. No audio is ever uploaded.
 - The mic is only open while you hold (or have tapped) the key, unless you turn on
   **Always listening**. Then it stays open, but a phrase that doesn't start with your call word is
-  dropped on the spot: never shown, saved or logged. **Commands from Discord audio** work the same way
+  dropped on the spot: never shown, saved or logged (the log only gets numbers: how long it took
+  to hear, and how close its first words came to the call word). One exception: when you were still
+  talking as you called it ("okay wait. Angel, open Spotify"), the sentence that starts with the
+  call word counts, but only if it's a command. **Commands from Discord audio** work the same way
   with what Discord plays, and never with a cloud model.
 - Phone Link: the agent never reads your contacts, messages, photos or call history. To answer a call
   it looks for the Accept button by name, and nothing it sees is kept.

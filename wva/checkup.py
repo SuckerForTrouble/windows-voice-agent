@@ -44,6 +44,22 @@ def c_speech():
 
 
 SLOW = 0.8  # seconds for the 2.5 s sample sentence: slower than this, commands feel sluggish
+LISTEN_SLOW = 0.6  # seconds a phrase takes to hear with always listening: the Linux agent's Parakeet takes ~0.15
+
+
+def listen_line(ms, dropped, model):
+    """(what always listening's speed was, a fix or ''): every phrase said near the mic goes
+    through the model, so a slow one makes the call word answer late, and a backlog drops phrases."""
+    if not ms:
+        return "", ""
+    avg = sum(ms) / len(ms)
+    text = f"always listening: a phrase takes {avg:.2f} s to hear (last {len(ms)})"
+    if dropped:
+        text += f", {dropped} let go while it was busy"
+    if (avg > LISTEN_SLOW or dropped) and not str(model).startswith("parakeet"):
+        return text, ("Always listening hears everything said near the mic, so it needs a quick model: tray → "
+                      "Speech model → Parakeet (about 0.2 s a phrase).")
+    return text, ""
 
 
 def _where(t):
@@ -89,9 +105,12 @@ def c_speed():
             after, rest = sum(x["stt"] for x in woke) / len(woke), sum(x["stt"] for x in t if x not in woke) / (len(t) - len(woke))
             if after > rest + 0.4:
                 parts.append(f"after a pause of 2+ minutes {after:.2f} s, otherwise {rest:.2f} s (the GPU waking from sleep)")
+    ear, ear_fix = listen_line(state.listen_ms if state.listening else [], state.listen_dropped, s.model)
+    if ear:
+        parts.append(ear)
     detail = "; ".join(parts)
     if best["best"] <= SLOW:
-        return OK, detail, ""
+        return (WARN, detail, ear_fix) if ear_fix else (OK, detail, "")
     if best["backend"] == "cpu" and not cheap:
         fix = "It runs on the CPU: tray → Speech model → Parakeet (fast even on a CPU), or update the NVIDIA driver."
     elif not cheap:

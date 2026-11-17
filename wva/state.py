@@ -11,3 +11,5 @@ paused = False      # tray → Pause for now: keys and always-on mic off
 reload_stt = None   # the app's: load the speech model again with the current settings
 discord_audio = False  # commands from Discord audio are on (dangerous opt-in, never saved)
 mic_stats = []      # the last push-to-talk recordings: {"noise", "voice", "clipped"} (recorder.stats)
+listen_ms = []      # always listening: seconds the model took for each of the last phrases it heard
+listen_dropped = 0  # phrases let go unheard because the model was still busy (the oldest of a backlog)

@@ -290,9 +290,70 @@ def test_always_listening_detector():
     one = phrases(_room(1.5) + speech + _room(1.5, seed=2))
     assert len(one) == 1, f"one sentence -> {len(one)} phrases"
     got, want = len(one[0]) / 32000, len(speech) / 32000
-    assert want - 0.3 < got < want + 1.2, f"phrase is {got:.2f}s, the sentence {want:.2f}s"
+    assert want - 0.3 < got < want + 0.8, f"phrase is {got:.2f}s, the sentence {want:.2f}s (only 0.3 s of silence after)"
     two = phrases(_room(1) + speech + _room(1.2, seed=3) + speech + _room(1.5, seed=4))
     assert len(two) == 2, f"two sentences with a pause -> {len(two)} phrases"
+
+
+def test_always_listening_like_linux():
+    """The Linux agent's fixes: a quiet mic is heard, clicks don't hold a phrase open, quiet phrases
+    are raised; the newest phrase is never the one dropped; near call words; the GPU-only second try."""
+    import array
+    import random
+    import wave
+
+    from wva import listen, stt
+    from wva.listen import Inbox, Segmenter, hear, louder, why_not
+    with wave.open(os.path.join(os.path.dirname(__file__), "data", "open_spotify.wav")) as w:
+        speech = w.readframes(w.getnframes())
+    quiet = array.array("h", (int(v * 0.03) for v in array.array("h", speech))).tobytes()  # a voice of ~100-200
+
+    def phrases(pcm):
+        seg = Segmenter()
+        return [p for p in (seg.feed(f) for f in _frames(pcm)) if p]
+    assert len(phrases(_room(2, amp=8) + quiet + _room(1.5, amp=8, seed=2))) == 1, "a quiet mic's voice"
+    assert phrases(_room(4, amp=8)) == [], "a quiet mic's silence"
+
+    clicks = array.array("h", _room(2.5, amp=8, seed=3))
+    r = random.Random(4)
+    for k in range(0, len(clicks) - 100, 1600):  # a click every 0.1 s, each ~5 ms
+        for i in range(80):
+            clicks[k + i] = int(r.gauss(0, 6000))
+    one = phrases(_room(2, amp=8) + speech + clicks.tobytes() + _room(1, amp=8, seed=5))
+    assert len(one) == 1 and len(one[0]) / 32000 < len(speech) / 32000 + 0.8, \
+        f"typing after the command: {[len(p) / 32000 for p in one]} s for a {len(speech) / 32000:.1f} s sentence"
+
+    up = array.array("h", louder(quiet))
+    assert 8000 <= max(abs(v) for v in up) <= 16100 and louder(speech) == speech
+
+    box = Inbox(size=3)
+    for n in range(5):
+        box.put(n)
+    assert [box.get(0), box.get(0), box.get(0), box.get(0)] == [2, 3, 4, None] and box.dropped == 2
+
+    cases = [("Angel, open Spotify.", ("open Spotify.", True)), ("Angel.", ("", True)),
+             ("Anjali, open Spotify", ("open Spotify", False)),  # only sounds like it: needs a command after
+             ("Okay wait. Angel, open Spotify.", ("open Spotify.", False)),
+             ("Angel, pause the music. Angel, take a screenshot.", ("pause the music. take a screenshot.", True)),
+             ("I told Angel to open it", None), ("Yeah. Angel.", None), ("open spotify", None), ("", None)]
+    for text, want in cases:
+        assert hear(text, "angel") == want, f"{text!r}: want {want!r}, got {hear(text, 'angel')!r}"
+    assert why_not("open spotify", "angel") < 0.5 <= why_not("angle", "angel")
+
+    w = stt.Whisper()
+    w.backend = "cpu"
+    assert not w.can_retry, "beam search over 30 s on a CPU takes 10 s and more"
+    w.backend = "vulkan"
+    assert w.can_retry and not stt.Parakeet.can_retry
+    del listen  # (imported for the names above)
+
+
+def test_listen_speed_line():
+    from wva.checkup import listen_line
+    assert listen_line([], 0, "large-v3-turbo-q5_0") == ("", "")
+    text, fix = listen_line([1.2, 1.4], 3, "large-v3-turbo-q5_0")
+    assert "1.30 s" in text and "3 let go" in text and "Parakeet" in fix
+    assert listen_line([0.15, 0.2], 0, "parakeet-tdt-0.6b-v3-q8_0")[1] == ""
 
 
 def test_call_word():
