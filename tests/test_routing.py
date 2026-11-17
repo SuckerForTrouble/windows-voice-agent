@@ -426,6 +426,9 @@ def test_liquid_glass():
             px = [img.getpixel((x, size[1] // 2))[:3] for x in range(m + 50, size[0] // 2)]
             ink = min(px, key=sum) if want_dark else max(px, key=sum)
             assert (sum(ink) < 200) if want_dark else (sum(ink) > 600), (colour, ink)
+    for i in range(300):  # the morph goes through many sizes: the cache must empty itself, not fail
+        liquid.render(Image.new("RGB", (200 + i + 2 * m, size[1]), (90, 90, 90)), 200 + i - 2 * m + 2 * m, liquid.H * scale,
+                      msg, scale=scale, fade=0)
     # see-through: a red screen behind makes red glass
     red = liquid.render(Image.new("RGB", size, (220, 30, 30)), w * scale, liquid.H * scale, msg, scale=scale, fade=0)
     r, g, b, _ = red.getpixel((size[0] // 2, size[1] // 2))

@@ -602,7 +602,7 @@ def _loop():
         root.attributes("-alpha", 0.0)
         if state["glass"] is not None:
             state["glass"].hide()
-        state.update(visible=False, alpha=0.0, geo=None, back=None)
+        state.update(visible=False, alpha=0.0, geo=None, back=None, sig=None)
         pill.msg, pill.closing = None, False
         pill.size, pill.vel = list(COMPACT), [0.0, 0.0]
 
@@ -632,6 +632,11 @@ def _loop():
         back = state["back"].crop((x - sx, y - sy, x - sx + W, y - sy + Hh))
         open_ = (cw - liquid.COMPACT[0]) / max(1.0, pill.target[0] - liquid.COMPACT[0]) if pill.target[0] > liquid.COMPACT[0] else 1.0
         fade = 0.0 if pill.closing else max(0.0, min(1.0, (open_ - 0.55) / 0.4))
+        # nothing moved and the screen behind didn't change: the frame on screen is still right
+        sig = (hash(back.tobytes()), round(cw), round(ch), round(fade, 2), int(255 * a), x, y, id(m))
+        if sig == state.get("sig") and not pill.animated():
+            return
+        state["sig"] = sig
         img = liquid.render(back, cw * S, ch * S, m, t=_now() - pill.t0, lv=pill.level(), fade=fade, scale=S,
                             show_timing=config.get("show_timing"), text=text, right=right)
         g.show(img, x, y, int(255 * a))

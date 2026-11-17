@@ -86,26 +86,34 @@ def layout(m, room, show_timing=False):
 _cache = {}
 
 
-def _shape(w, h, k=3):
+def _cached(key, make):
+    """Masks and lens meshes depend only on the size: made once per size (the morph goes
+    through a few dozen; the cache is emptied when it gets big)."""
+    key = key + (MARGIN_PX[0],)
+    got = _cache.get(key)
+    if got is None:
+        if len(_cache) > 240:
+            _cache.clear()
+        got = _cache[key] = make()
+    return got
+
+
+def _shape(w, h, k=2):
     """The capsule's mask, smooth-edged (drawn 3x larger, then scaled down), with MARGIN around."""
-    key = ("shape", w, h)
-    if key not in _cache:
+    def make():
         W, Hh, M = w + 2 * MARGIN_PX[0], h + 2 * MARGIN_PX[0], MARGIN_PX[0]
         big = Image.new("L", (W * k, Hh * k), 0)
         ImageDraw.Draw(big).rounded_rectangle([M * k, M * k, (M + w) * k - 1, (M + h) * k - 1], radius=h * k / 2, fill=255)
-        _cache[key] = big.resize((W, Hh), Image.LANCZOS)
-        if len(_cache) > 120:
-            _cache.clear()
-    return _cache[key]
+        return big.resize((W, Hh), Image.BOX)
+    return _cached(("shape", w, h), make)
 
 
 MARGIN_PX = [MARGIN]  # MARGIN in pixels at the current scale (set by render)
 
 
-def _ring(w, h, inset, width, k=3):
+def _ring(w, h, inset, width, k=2):
     """A thin ring just inside the capsule's edge (for the rim light)."""
-    key = ("ring", w, h, inset, width)
-    if key not in _cache:
+    def make():
         M = MARGIN_PX[0]
         W, Hh = w + 2 * M, h + 2 * M
         big = Image.new("L", (W * k, Hh * k), 0)
@@ -114,8 +122,8 @@ def _ring(w, h, inset, width, k=3):
         d.rounded_rectangle([x0, y0, x1, y1], radius=(h / 2 - inset) * k, fill=255)
         d.rounded_rectangle([x0 + width * k, y0 + width * k, x1 - width * k, y1 - width * k],
                             radius=max(1, (h / 2 - inset - width) * k), fill=0)
-        _cache[key] = big.resize((W, Hh), Image.LANCZOS)
-    return _cache[key]
+        return big.resize((W, Hh), Image.BOX)
+    return _cached(("ring", w, h, inset, width), make)
 
 
 def _light(w, h, a, b, c):
@@ -131,10 +139,18 @@ def _lens(back, w, h, strength):
     little further out, squeezed in (Pillow's mesh transform; the middle stays as it is)."""
     M = MARGIN_PX[0]
     W, Hh = w + 2 * M, h + 2 * M
+    return back.transform((W, Hh), Image.MESH, _cached(("lens", w, h, round(strength, 1)), lambda: _mesh(w, h, strength)),
+                          Image.BILINEAR)
+
+
+def _mesh(w, h, strength):
+    """The lens as mesh cells: small ones at the round ends and along the top and bottom rims,
+    one wide column across the straight middle (there the bend is only up and down)."""
+    M = MARGIN_PX[0]
+    W, Hh = w + 2 * M, h + 2 * M
     r = h / 2
     band = r * 0.9
     step = max(4, int(h / 7))
-    mesh = []
 
     def src(x, y):
         px, py = x - M, y - M
@@ -146,12 +162,14 @@ def _lens(back, w, h, strength):
             return x, y
         amt = strength * (1 - d / band) ** 2
         return x + dx / dist * amt, y + dy / dist * amt
-    for y in range(0, Hh, step):
-        for x in range(0, W, step):
-            x1, y1 = min(W, x + step), min(Hh, y + step)
-            q = src(x, y) + src(x, y1) + src(x1, y1) + src(x1, y)
-            mesh.append(((x, y, x1, y1), q))
-    return back.transform((W, Hh), Image.MESH, mesh, Image.BILINEAR)
+    left, right = int(M + r), int(M + w - r)
+    xs = sorted(set(list(range(0, left, step)) + [left] + ([right] if right > left else []) + list(range(right, W, step)) + [W]))
+    ys = sorted(set(list(range(0, Hh, step)) + [Hh]))
+    mesh = []
+    for y, y1 in zip(ys, ys[1:]):
+        for x, x1 in zip(xs, xs[1:]):
+            mesh.append(((x, y, x1, y1), src(x, y) + src(x, y1) + src(x1, y1) + src(x1, y)))
+    return mesh
 
 
 def render(back, w, h, m, t=0.0, lv=0.0, fade=1.0, scale=1.0, show_timing=False, text=None, right=""):
@@ -176,34 +194,35 @@ def render(back, w, h, m, t=0.0, lv=0.0, fade=1.0, scale=1.0, show_timing=False,
         glass = ImageEnhance.Brightness(glass).enhance(0.82)
     out = Image.new("RGBA", (W, Hh), (0, 0, 0, 0))
     # the soft shadow under it
-    shadow = shape.filter(ImageFilter.GaussianBlur(8 * scale)).point(lambda v: int(v * 0.30))
+    shadow = _cached(("shadow", w, h), lambda: shape.filter(ImageFilter.GaussianBlur(8 * scale)).point(lambda v: int(v * 0.30)))
     out.paste((0, 0, 0, 255), (0, int(3 * scale)), shadow)
     gl = glass.convert("RGBA")
     gl.putalpha(shape)
     out = Image.alpha_composite(out, gl)
     # light: a glow just inside the edge, and the specular rim (top-left and bottom-right)
-    glow = ImageChops.subtract(shape, _shape_inset(w, h, 5 * scale).filter(ImageFilter.GaussianBlur(4 * scale)))
-    out.paste((255, 255, 255), (0, 0), glow.point(lambda v: int(v * 0.28)))
-    rim = ImageChops.multiply(_ring(w, h, 0.6, 1.4 * scale), _light(w, h, 255, 70, 200))
-    out.paste((255, 255, 255), (0, 0), rim)
-    edge = ImageChops.multiply(_ring(w, h, 0, 0.9 * scale), _light(w, h, 90, 40, 70))
+    def light():  # all of it depends only on the size: made once per size, then one paste each
+        glow = ImageChops.subtract(shape, _shape_inset(w, h, 5 * scale).filter(ImageFilter.GaussianBlur(4 * scale)))
+        rim = ImageChops.multiply(_ring(w, h, 0.6, 1.4 * scale), _light(w, h, 255, 70, 200))
+        sheen = ImageChops.multiply(_top(W, Hh, M, h), shape)
+        white = ImageChops.add(ImageChops.add(glow.point(lambda v: int(v * 0.28)), rim), sheen)
+        edge = ImageChops.multiply(_ring(w, h, 0, 0.9 * scale), _light(w, h, 90, 40, 70))
+        return white, edge
+    white, edge = _cached(("light", w, h), light)
+    out.paste((255, 255, 255), (0, 0), white)
     out.paste((0, 0, 0), (0, 0), edge)  # a faint dark outline, so it reads over white too
-    sheen = ImageChops.multiply(_top(W, Hh, M, h), shape)
-    out.paste((255, 255, 255), (0, 0), sheen)
     if fade > 0:
         _content(out, m, w, h, M, t, lv, fade, scale, bright, show_timing, text, right)
     return out
 
 
-def _shape_inset(w, h, inset, k=3):
-    key = ("inset", w, h, round(inset, 1))
-    if key not in _cache:
+def _shape_inset(w, h, inset, k=2):
+    def make():
         M = MARGIN_PX[0]
         big = Image.new("L", ((w + 2 * M) * k, (h + 2 * M) * k), 0)
         ImageDraw.Draw(big).rounded_rectangle([(M + inset) * k, (M + inset) * k, (M + w - inset) * k, (M + h - inset) * k],
                                               radius=max(1, (h / 2 - inset) * k), fill=255)
-        _cache[key] = big.resize((w + 2 * M, h + 2 * M), Image.LANCZOS)
-    return _cache[key]
+        return big.resize((w + 2 * M, h + 2 * M), Image.BOX)
+    return _cached(("inset", w, h, round(inset, 1)), make)
 
 
 def _top(W, Hh, M, h):
@@ -272,7 +291,7 @@ def _content(out, m, w, h, M, t, lv, fade, scale, bright, show_timing, text, rig
         xr -= 42 * s
     if right:
         d.text((xr, cy), right, font=font(11 * s), fill=soft, anchor="rm")
-    layer = layer.resize((W, Hh), Image.LANCZOS)
+    layer = layer.resize((W, Hh), Image.BOX)  # (exactly half: a box filter is as smooth, and quicker)
     if fade < 1:
         a = layer.getchannel("A").point(lambda v: int(v * fade))
         layer.putalpha(a)
