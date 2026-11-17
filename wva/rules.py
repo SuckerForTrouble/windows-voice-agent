@@ -8,6 +8,7 @@ from . import audio as au
 from . import choices as ch
 from . import extras as x
 from . import files as fl
+from . import handy as hd
 from . import learn as le
 from . import phone as ph
 from . import system as s
@@ -214,6 +215,12 @@ rule(G, "nvidia overlay | game bar", "Alt+Z / Win+G",
 rule(C, "close the game", "The game you're playing (it gets 4 s to close by itself)",
      [r"(?:close|quit|exit|kill|end|stop) (?:the |this |my )?game", r"(?:force )?(?:close|quit) (?:the )?game (?:now|completely)"],
      lambda: a.close_game(), wake="strict")
+rule(C, "restart <app>", "Quits it completely and opens it again: 'restart discord', 'relaunch spotify'",
+     [r"(?:restart|relaunch|reopen|reload|reboot|re open|re launch) " + THE + r"(.+?)(?: app| program| completely)?",
+      r"(?:close|quit) " + THE + r"(.+?) and (?:open|start|launch) it (?:again|back up)"],
+     hd.restart_app, guard=lambda n: not re.search(r"\b(?:song|track|music|video|page|tab|tabs|site|computer|pc|laptop|"
+                                                   r"system|windows|explorer|taskbar|start menu|timer|stopwatch)\b", n)
+     and a.app_known(n))
 rule(C, "quit <app> completely", "Closes it from the tray too: 'quit discord', 'close spotify from the tray', 'kill steam'",
      [r"(?:quit|exit|kill|end|force (?:close|quit)|terminate) " + THE + r"(.+?)(?: app| completely| fully| for good| from the tray| in the tray| entirely)?",
       r"close " + THE + r"(.+?) (?:completely|fully|from the tray|in the tray|for good|entirely|from the background)",
@@ -348,6 +355,18 @@ rule(K, "save", "Ctrl+S", [r"save (?:it|this|that|the file|my work|changes|the d
 # Windows -----------------------------------------------------------------------------
 WIN = r"(?:(?:the |this |that |my |current )?(?:window|app|application|program)|it|this|that)"
 TOO = {"big": "smaller", "small": "bigger", "wide": "narrower", "narrow": "wider", "tall": "shorter", "short": "taller"}
+rule(W, "extend | duplicate the display", "Win+P: 'extend the display', 'duplicate the screen', 'second screen only', "
+     "'PC screen only'",
+     [r"(extend|duplicate|mirror|clone|copy) (?:the |my )?(?:display|screen|screens|displays|monitor|monitors)"
+      r"(?: (?:to|on|onto) (?:the |my )?(?:second|other|external) (?:screen|monitor|display))?",
+      r"(?:use |show )?(?:the |my )?(second|external|other|pc|laptop|first|main|computer|this) (?:screen|monitor|display) only",
+      r"only (?:use |show )?(?:the |my )?(second|external|other|pc|laptop|first|main|computer|this) (?:screen|monitor|display)",
+      r"(?:project(?:ion)?|display) (?:mode )?(extend|duplicate|mirror)"],
+     lambda m: hd.display(m), wake=True)
+rule(W, "switch keyboard language", "Win+Space: the next keyboard layout (English / Hindi…)",
+     [r"(?:switch|change|next|toggle|cycle|swap) (?:the |my )?(?:keyboard )?(?:language|layout|input(?: language| method)?)(?: layout)?",
+      r"(?:switch|change|swap) (?:the |my )?keyboard(?: language| layout)?", r"(?:next|other) keyboard(?: layout| language)?"],
+     hd.keyboard_language, wake=True)
 rule(W, "show desktop", "Win+D (say it again to bring everything back)",
      [r"(?:show|go to|take me to) (?:the )?desktop", r"minimi[sz]e (?:everything|all(?: the)?(?: windows| apps)?)",
       r"hide (?:everything|all (?:the )?windows)"], lambda: a.keys("win+d"))
@@ -593,6 +612,36 @@ rule(SY, "search my PC for <text>", "Windows search",
       r"(?:find|search for|look for) (.+?) on (?:my |this |the )?(?:pc|computer|laptop)"], a.windows_search, wake=True, free=True)
 
 # Info --------------------------------------------------------------------------------
+rule(I, "calculate <sum>", "'what's 25 times 4', '15 percent of 200', 'square root of 81', '2 to the power of 10'",
+     [r"(?:what(?:'s| is)|calculate|compute|how much is|solve|work out|tell me|what are|what does) (.+?)(?: equal| make)?",
+      r"(.+)"], hd.calculate, wake=True, guard=lambda t: hd.sum_of(t) is not None)
+rule(I, "flip a coin", "", [r"(?:flip|toss) (?:a |the |me a )?coin", r"heads or tails", r"coin (?:flip|toss)"], hd.coin, wake=True)
+rule(I, "roll a dice", "'roll a dice', 'roll two dice'",
+     [r"(?:roll|throw) (?:a |the |some |me a )?(?:(\w+) )?(?:dice|die|dices)", r"dice roll"],
+     lambda n=None: hd.dice(n), wake=True, guard=lambda n=None: n is None or engine.num(n) is not None)
+rule(I, "random number [between <a> and <b>]", "'pick a random number', 'pick a number between 1 and 10'",
+     [r"(?:pick|give me|choose|say|tell me|generate) (?:a |me a )?random number(?: between (.+?) and (.+?))?",
+      r"random number(?: between (.+?) and (.+?))?", r"(?:pick|choose) a number between (.+?) and (.+)"],
+     lambda lo=None, hi=None: hd.random_number(lo, hi), wake=True,
+     guard=lambda lo=None, hi=None: lo is None or hd.numbers_ok(lo, hi))
+rule(I, "internet speed test", "Opens fast.com",
+     [r"(?:internet |wifi |network |download )?speed ?test", r"(?:run|do) (?:a |an )?(?:internet )?speed ?test",
+      r"how fast is (?:my |the )?(?:internet|wifi|connection|net)", r"(?:check|test) (?:my |the )?(?:internet|wifi|download|net) speed",
+      r"(?:my )?internet speed"], hd.speed_test, wake=True)
+rule(I, "is the internet working", "Pings 1.1.1.1: online or not, and the ping",
+     [r"is (?:the |my )?(?:internet|wifi|net|connection|network) (?:working|up|down|ok|okay|on|slow|fine)",
+      r"(?:am i|are we) (?:online|connected)(?: to the internet)?", r"(?:check|test) (?:my |the )?(?:internet|connection|ping|network|net)(?: connection)?",
+      r"what(?:'s| is) my ping", r"(?:internet|connection|network) (?:check|status|test)", r"ping(?: test)?", r"do i have (?:internet|wifi)",
+      r"(?:net|internet) (?:chal raha hai|chal rha hai|aa raha hai|hai)"], hd.internet, wake=True)
+rule(I, "translate <text> to <language>", "Google Translate: 'translate good morning to hindi', 'how do you say thank you in spanish'",
+     [r"translate (.+?) (?:to|into|in) (\w+)", r"how do (?:you|i) say (.+?) in (\w+)", r"what(?:'s| is) (.+?) in (\w+)",
+      r"(.+?) (?:ko|in) (\w+) (?:mein|me) (?:kya kehte hain|kaise bolte hain|translate karo)", r"translate (.+)"],
+     lambda t, lang="english": hd.translate(t, lang), wake=True, free=True,
+     guard=lambda t, lang="english": hd.lang_ok(t, lang))
+rule(I, "define <word>", "What a word means: 'define serendipity', 'what does yeet mean'",
+     [r"define (.+)", r"(?:what(?:'s| is) )?(?:the )?(?:meaning|definition) of (.+)", r"what does (.+?) mean",
+      r"(.+?) (?:ka|ki) (?:matlab|meaning)(?: kya (?:hai|hota hai))?", r"(?:what's|what is) (.+?) mean"],
+     hd.define, wake=True, free=True)
 rule(I, "time", "", [r"(?:what(?:'s| is) )?(?:the )?(?:current )?time(?: (?:is it|now|right now|please))?", r"what time is it(?: now| right now)?",
                      r"tell me (?:the )?(?:current )?time", r"(?:do you )?(?:know|have) the time", r"time (?:check|please)"], s.clock, wake=True)
 rule(I, "date", "", [r"(?:what(?:'s| is) )?(?:the |today's )?(?:current )?date(?: today)?", r"tell me (?:the |today's )?(?:current )?date(?: today)?",
@@ -629,6 +678,11 @@ rule(I, "ip address", "Local IP", [r"(?:what(?:'s| is) )?(?:my )?ip(?: address)?
 
 # Timers ------------------------------------------------------------------------------
 SET = r"(?:set|start|create|make|put on|give me|begin|run|add)"
+rule(T, "stopwatch start | stop | how long", "One stopwatch: 'start a stopwatch', 'stop the stopwatch', 'stopwatch time'",
+     [r"(start|begin|reset|restart) (?:a |the |my )?stop ?watch", r"(stop|end|pause) (?:the |my )?stop ?watch",
+      r"(?:how long (?:has it been|on the stop ?watch)|stop ?watch(?: time| status)?|(?:check|show|read) (?:the |my )?stop ?watch|lap)"],
+     lambda w=None: hd.stopwatch({"begin": "start", "reset": "start", "restart": "start", "end": "stop", "pause": "stop"}.get(w, w or "status")),
+     wake=True)
 rule(T, "timer <n> minutes [called …]", "'set a 10 minute timer', 'remind me in 10 minutes to stretch'",
      [rf"(?:{SET} )?(?:a |an |the |my )?(.+?) (?:timer|countdown)(?: (?:named|called|for) (.+))?",
       rf"(?:{SET} )?(?:a |an |the |my )?(?:timer|countdown) (?:for |of )?(.+?)(?: (?:named|called) (.+))?",

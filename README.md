@@ -48,6 +48,15 @@ That's it. It starts with Windows and **updates itself**.
 | Say **"what can I say"** | opens the voice guide |
 | Say **"check my setup"** | tests everything again |
 
+Say it however you'd say it: "it's too loud", "full volume", "kill the music", "another song",
+"get rid of discord" all work, and so does Hinglish: "spotify kholo", "volume badhao", "agla gaana",
+"arijit singh bajao", "chrome band karo", "kitne baje hain" (about 600 other phrasings, in `wva/phrases.py`).
+
+Handy extras: "what's 25 times 4", "15 percent of 200", "flip a coin", "roll two dice", "pick a number
+between 1 and 10", "start / stop the stopwatch", "is the internet working" (and the ping), "run a speed
+test", "translate good morning to hindi", "what does serendipity mean", "restart discord", "extend the
+display" / "second screen only", "switch keyboard language".
+
 The **tray icon** (by the clock, maybe behind the **^** arrow) shows what it's doing:
 🔵 ready · 🔴 listening · 🟠 thinking · ⚪ loading.
 
@@ -276,6 +285,7 @@ python3 -m wva --list                      # every command
 | `wva/actions.py`, `extras.py`, `system.py` | what commands do on Windows (Spotify, Discord, Stremio… in `extras`) |
 | `wva/apps.py` | open/close by name: Start menu, Store apps, Steam/Epic games, sites, process names, a browser by name |
 | `wva/phone.py` | Phone Link: answer / decline / hang up (UI Automation + its own keys), call, text, its pages |
+| `wva/phrases.py`, `handy.py` | other ways to say a command (English and Hinglish); sums, coin, dice, stopwatch, ping, translate |
 | `wva/listen.py`, `loopback.py` | always listening and call words; commands from Discord audio (WASAPI loopback) |
 | `wva/learn.py` | learning from retries, "did you mean?", "no, that's wrong", "forget that" |
 | `wva/app.py` | the running agent: tray, keys, mic → whisper → commands |

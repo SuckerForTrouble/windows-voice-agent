@@ -254,8 +254,35 @@ def clean(text):
     return re.sub(r"\s+", " ", t).strip()
 
 
+_SAME = {}
+
+
+def _same():
+    """phrases.SAME as cleaned-up text -> the phrase it stands for (built once)."""
+    if not _SAME:
+        from . import phrases
+        for canon, variants in phrases.SAME.items():
+            for v in variants:
+                key = _core(clean(v))
+                # "next please" is "next" once the please is gone: a one-word command of its own
+                # (Instagram's next, the music's next) stays what it is
+                if len(key.split()) == 1 and key != re.sub(r"[,.;!?]", "", clean(v)).strip():
+                    continue
+                _SAME.setdefault(key, canon)
+    return _SAME
+
+
 def natural(part):
-    """One command's text: no punctuation, no politeness, no filler."""
+    """One command's text: no punctuation, no politeness, no filler; another way of saying a
+    command (phrases.py: "too loud", "spotify kholo") becomes the command."""
+    from . import phrases
+    t = _core(part)
+    t = _same().get(t, t)
+    t = phrases.rewrite(t)
+    return TUNE_SAY.get(t, t)
+
+
+def _core(part):
     t = re.sub(r"[,.;!?]", " ", part)
     t = re.sub(r"(?<!\w)-|-(?!\w)", " ", t)
     t = re.sub(r"\s+", " ", t).strip()
@@ -266,7 +293,7 @@ def natural(part):
             t = re.sub("^" + p, "", t)
         t = re.sub(TRAIL, "", t)
         t = VERB_RE.sub(lambda m: VERB_FORMS[m.group(1)], t.strip())
-    return TUNE_SAY.get(t, t)
+    return t
 
 
 def match(t):

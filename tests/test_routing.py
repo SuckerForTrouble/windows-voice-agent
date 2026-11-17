@@ -356,6 +356,50 @@ def test_listen_speed_line():
     assert listen_line([0.15, 0.2], 0, "parakeet-tdt-0.6b-v3-q8_0")[1] == ""
 
 
+def test_said_another_way():
+    """phrases.py: every other way of saying a command lands where the command does; Hindi word
+    order with a name in it; typed and searched text keeps its words."""
+    from wva import phrases
+
+    def says(text, front=""):
+        engine.CTX.dry, engine.CTX.raw, engine.CTX.front, engine.CTX.last_target = True, text, front, None
+        return [r.say for r, _, _ in engine.plan(text, woke=True)[0]]
+    bad = []
+    for canon, variants in phrases.SAME.items():
+        want = says(canon)
+        assert want, f"{canon!r} itself doesn't route"
+        bad += [f"{v!r}: {says(v)} (want {want})" for v in variants if says(v) != want]
+    assert not bad, "\n".join(bad)
+    for text, like in [("spotify kholo", "open spotify"), ("bhai discord khol do", "open discord"),
+                       ("chrome band karo yaar", "close chrome"), ("arijit singh bajao", "play arijit singh"),
+                       ("lofi search karo", "search lofi"), ("volume thoda badhao", "volume up"),
+                       ("awaaz kam kar do", "volume down"), ("gaana roko", "pause music"), ("agla gaana", "next song"),
+                       ("pichla song chalao", "previous song"), ("kitne baje hain", "what time is it"),
+                       ("aaj ki date", "what's the date"), ("wifi band karo", "turn off wifi"),
+                       ("tab band karo", "close tab"), ("pc lock karo", "lock the pc"), ("chup karo", "mute"),
+                       ("get rid of steam", "close steam"), ("switch over to chrome", "switch to chrome"),
+                       ("put on some music", "play music")]:
+        assert says(text) == says(like), f"{text!r}: {says(text)}, want {says(like)} (as {like!r})"
+    assert says("next") == ["pause | play | next | previous"] and says("next", front="instagram") == ["next | back (Instagram in front)"]
+    assert says("down") == ["up | down (one word)"]
+    engine.CTX.raw = "type spotify kholo"
+    steps, _ = engine.plan("type spotify kholo", woke=True)
+    assert [r.say for r, _, _ in steps] == ["type <text>"] and steps[0][1] == ("spotify kholo",), steps
+
+
+def test_everyday_extras():
+    from wva import handy
+    for text, want in [("25 times 4", 100), ("100 divided by 8", 12.5), ("fifteen percent of 200", 30),
+                       ("2 to the power of 10", 1024), ("square root of 81", 9), ("7 plus 3 minus 2", 8),
+                       ("twenty five into four", 100), ("10 by 4", 2.5)]:
+        got = handy.sum_of(text)
+        assert got and abs(got[1] - want) < 1e-9, f"{text!r}: {got}"
+    for text in ["hello there", "open spotify", "2 to the power of 1000", "5 divided by 0", "volume 50", ""]:
+        assert handy.sum_of(text) is None, f"{text!r} is not a sum: {handy.sum_of(text)}"
+    assert handy._fmt(12.5) == "12.5" and handy._fmt(100.0) == "100" and handy._fmt(1234567) == "1,234,567"
+    assert handy.lang_ok("hello", "Hindi") and not handy.lang_ok("hello", "delhi")
+
+
 def test_call_word():
     from wva.listen import call_word_ok, call_words, strip_call
     cases = [("Jarvis, open Spotify.", "jarvis", "open Spotify."), ("Hey Jarvis open spotify", "jarvis", "open spotify"),
