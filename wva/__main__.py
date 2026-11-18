@@ -97,6 +97,34 @@ def selftest(out, stt_model=None, wav=None):
         res["settings_window"] = f"ok: {n[0]} widgets"
     except Exception as e:  # noqa: BLE001
         res["settings_window"] = f"{type(e).__name__}: {e}"
+    try:  # Settings as the tray opens it: not the first start, every setting, saved through Save
+        from . import config as _config
+        from .app import App
+        from .settings_window import Window
+        _config.load()
+        w = Window({k: _config.get(k) for k in App.SETTINGS}, False)
+        w.root.after(600, w._save)
+        got = w.run() or {}
+        missing = [k for k in App.SETTINGS if k not in got and k not in ("call_word",)]
+        res["settings_saves"] = "ok" if got and not missing else f"saved {sorted(got)}; missing {missing}"
+    except Exception as e:  # noqa: BLE001
+        res["settings_saves"] = f"{type(e).__name__}: {e}"
+    try:  # the Island's liquid-glass window: made, shown on the desktop with a rendered frame, hidden
+
+        from . import liquid
+        g = liquid.Window()
+        msg = {"kind": "ok", "text": "Open Spotify", "title": None, "chips": [], "footer": "", "source": None, "seconds": 3}
+        width, text, right = liquid.layout(msg, 800)
+        m = liquid.MARGIN
+        back = g.backdrop(100, 10, int(width) + 2 * m, liquid.H + 2 * m)
+        img = liquid.render(back, width, liquid.H, msg, text=text)
+        g.show(img, 100, 10, 255)
+        g.on_top()
+        time.sleep(0.3)
+        g.hide()
+        res["liquid_glass"] = f"ok: {img.size[0]}x{img.size[1]}, kept out of capture: {g.excluded}"
+    except Exception as e:  # noqa: BLE001
+        res["liquid_glass"] = f"{type(e).__name__}: {e}"
     try:  # the tray panel draws (on a hidden canvas, with made-up values)
         import tkinter as tk
 
@@ -196,6 +224,7 @@ def selftest(out, stt_model=None, wav=None):
         json.dump(res, f, indent=2)
     ok = (all(v == "ok" for v in res["imports"].values()) and not bad and str(res["tray"]).startswith("ok")
           and str(res.get("settings_window")).startswith("ok") and str(res.get("panel")).startswith("ok")
+          and res.get("settings_saves") == "ok" and str(res.get("liquid_glass")).startswith("ok")
           and res.get("shortcut") == "ok")
     return 0 if ok else 1
 

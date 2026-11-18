@@ -18,14 +18,26 @@ TK = {"prior": "pageup", "next": "pagedown", "return": "enter", "escape": "escap
 MODIFIER_KEYS = {"control_l", "control_r", "shift_l", "shift_r", "alt_l", "alt_r", "win_l", "win_r"}
 
 
+last_error = ""  # why the last dialog didn't open ("" when it did, or was just closed)
+
+
 def ask(kind, *args, timeout=300):
-    """Run a dialog and wait for its answer (None when cancelled)."""
+    """Run a dialog and wait for its answer (None when cancelled). If it crashed instead,
+    last_error says why (the details are in logs/dialog.log)."""
+    global last_error
+    last_error = ""
     out = Path(tempfile.gettempdir()) / f"wva-dialog-{time.time_ns()}.json"
     argv = [sys.executable] + ([] if paths.FROZEN else ["-m", "wva"]) + ["--dialog", kind, str(out), *args]
     try:
         subprocess.run(argv, timeout=timeout, cwd=str(paths.INSTALL))
-        return json.loads(out.read_text(encoding="utf-8")).get("value")
-    except Exception:
+        got = json.loads(out.read_text(encoding="utf-8"))
+        last_error = got.get("error", "")
+        return got.get("value")
+    except FileNotFoundError:
+        last_error = "it closed without an answer (see logs/dialog.log)"
+        return None
+    except Exception as e:
+        last_error = f"{type(e).__name__}: {e}"
         return None
     finally:
         out.unlink(missing_ok=True)
@@ -198,7 +210,20 @@ def discord_audio(out, words, whole_pc=""):
 
 
 def run(kind, out, *args):
-    if kind == "settings":
-        from . import settings_window
-        return settings_window.run(out, *args)
-    {"pick-key": pick_key, "api-key": api_key, "call-word": call_word, "discord-audio": discord_audio}[kind](out, *args)
+    """In the dialog's own process. A crash is written to logs/dialog.log and handed back to the
+    app as the answer's "error", so it can say so instead of nothing happening."""
+    try:
+        if kind == "settings":
+            from . import settings_window
+            return settings_window.run(out, *args)
+        {"pick-key": pick_key, "api-key": api_key, "call-word": call_word, "discord-audio": discord_audio}[kind](out, *args)
+    except Exception as e:
+        import traceback
+        try:
+            paths.ensure()
+            with open(paths.LOGS / "dialog.log", "a", encoding="utf-8") as f:
+                f.write(f"--- {time.ctime()} {kind}\n{traceback.format_exc()}\n")
+        except OSError:
+            pass
+        Path(out).write_text(json.dumps({"value": None, "error": f"{type(e).__name__}: {e}"}), encoding="utf-8")
+        return 1

@@ -299,43 +299,91 @@ def _content(out, m, w, h, M, t, lv, fade, scale, bright, show_timing, text, rig
 
 
 # ----------------------------------------------------------------- the window (Windows)
+_api = {}
+
+
+def _win32():
+    """Private copies of user32 / gdi32 / kernel32 with exact 64-bit types on every call used here
+    (handles must not be cut to 32 bits), so other code's own types for these calls aren't touched."""
+    if _api:
+        return _api
+    from ctypes import wintypes as wt
+    u = ctypes.WinDLL("user32", use_last_error=True)
+    g = ctypes.WinDLL("gdi32", use_last_error=True)
+    k = ctypes.WinDLL("kernel32", use_last_error=True)
+    LRESULT = ctypes.c_ssize_t
+    WNDPROC = ctypes.WINFUNCTYPE(LRESULT, wt.HWND, wt.UINT, wt.WPARAM, wt.LPARAM)
+
+    class WNDCLASSEXW(ctypes.Structure):
+        _fields_ = [("cbSize", wt.UINT), ("style", wt.UINT), ("lpfnWndProc", WNDPROC), ("cbClsExtra", ctypes.c_int),
+                    ("cbWndExtra", ctypes.c_int), ("hInstance", wt.HINSTANCE), ("hIcon", wt.HICON),
+                    ("hCursor", wt.HANDLE), ("hbrBackground", wt.HBRUSH), ("lpszMenuName", wt.LPCWSTR),
+                    ("lpszClassName", wt.LPCWSTR), ("hIconSm", wt.HICON)]
+
+    class BITMAPINFOHEADER(ctypes.Structure):
+        _fields_ = [("biSize", wt.DWORD), ("biWidth", wt.LONG), ("biHeight", wt.LONG), ("biPlanes", wt.WORD),
+                    ("biBitCount", wt.WORD), ("biCompression", wt.DWORD), ("biSizeImage", wt.DWORD),
+                    ("biXPelsPerMeter", wt.LONG), ("biYPelsPerMeter", wt.LONG), ("biClrUsed", wt.DWORD),
+                    ("biClrImportant", wt.DWORD)]
+
+    class BLENDFUNCTION(ctypes.Structure):
+        _fields_ = [("BlendOp", ctypes.c_ubyte), ("BlendFlags", ctypes.c_ubyte), ("SourceConstantAlpha", ctypes.c_ubyte),
+                    ("AlphaFormat", ctypes.c_ubyte)]
+
+    def proto(fn, res, *args):
+        fn.restype, fn.argtypes = res, list(args)
+        return fn
+    P = ctypes.POINTER
+    _api.update(
+        wt=wt, WNDPROC=WNDPROC, WNDCLASSEXW=WNDCLASSEXW, BITMAPINFOHEADER=BITMAPINFOHEADER, BLENDFUNCTION=BLENDFUNCTION,
+        GetModuleHandleW=proto(k.GetModuleHandleW, wt.HMODULE, wt.LPCWSTR),
+        DefWindowProcW=proto(u.DefWindowProcW, LRESULT, wt.HWND, wt.UINT, wt.WPARAM, wt.LPARAM),
+        RegisterClassExW=proto(u.RegisterClassExW, wt.ATOM, P(WNDCLASSEXW)),
+        CreateWindowExW=proto(u.CreateWindowExW, wt.HWND, wt.DWORD, wt.LPCWSTR, wt.LPCWSTR, wt.DWORD, ctypes.c_int,
+                              ctypes.c_int, ctypes.c_int, ctypes.c_int, wt.HWND, wt.HMENU, wt.HINSTANCE, wt.LPVOID),
+        SetWindowDisplayAffinity=proto(u.SetWindowDisplayAffinity, wt.BOOL, wt.HWND, wt.DWORD),
+        ShowWindow=proto(u.ShowWindow, wt.BOOL, wt.HWND, ctypes.c_int),
+        SetWindowPos=proto(u.SetWindowPos, wt.BOOL, wt.HWND, wt.HWND, ctypes.c_int, ctypes.c_int, ctypes.c_int,
+                           ctypes.c_int, wt.UINT),
+        GetDC=proto(u.GetDC, wt.HDC, wt.HWND),
+        ReleaseDC=proto(u.ReleaseDC, ctypes.c_int, wt.HWND, wt.HDC),
+        UpdateLayeredWindow=proto(u.UpdateLayeredWindow, wt.BOOL, wt.HWND, wt.HDC, P(wt.POINT), P(wt.SIZE), wt.HDC,
+                                  P(wt.POINT), wt.COLORREF, P(BLENDFUNCTION), wt.DWORD),
+        CreateCompatibleDC=proto(g.CreateCompatibleDC, wt.HDC, wt.HDC),
+        CreateDIBSection=proto(g.CreateDIBSection, wt.HBITMAP, wt.HDC, ctypes.c_void_p, wt.UINT, P(ctypes.c_void_p),
+                               wt.HANDLE, wt.DWORD),
+        SelectObject=proto(g.SelectObject, wt.HGDIOBJ, wt.HDC, wt.HGDIOBJ),
+        DeleteObject=proto(g.DeleteObject, wt.BOOL, wt.HGDIOBJ),
+        DeleteDC=proto(g.DeleteDC, wt.BOOL, wt.HDC),
+    )
+    return _api
+
+
 class Window:
     """A click-through, never-focused, topmost layered window that shows an RGBA image with
     per-pixel alpha (UpdateLayeredWindow), and reads the screen behind it."""
 
-    def __init__(self):
-        from ctypes import wintypes as wt
-        self.wt = wt
-        u, g, k = ctypes.windll.user32, ctypes.windll.gdi32, ctypes.windll.kernel32
-        self.u, self.g = u, g
-        LRESULT = ctypes.c_ssize_t
-        WNDPROC = ctypes.WINFUNCTYPE(LRESULT, wt.HWND, wt.UINT, wt.WPARAM, wt.LPARAM)
-        u.DefWindowProcW.argtypes = [wt.HWND, wt.UINT, wt.WPARAM, wt.LPARAM]
-        u.DefWindowProcW.restype = LRESULT
-        self._proc = WNDPROC(lambda hw, msg, wp, lp: u.DefWindowProcW(hw, msg, wp, lp))
+    CLASS = "WvaLiquidGlass"
 
-        class WNDCLASSEXW(ctypes.Structure):
-            _fields_ = [("cbSize", wt.UINT), ("style", wt.UINT), ("lpfnWndProc", WNDPROC), ("cbClsExtra", ctypes.c_int),
-                        ("cbWndExtra", ctypes.c_int), ("hInstance", wt.HINSTANCE), ("hIcon", wt.HICON),
-                        ("hCursor", wt.HANDLE), ("hbrBackground", wt.HBRUSH), ("lpszMenuName", wt.LPCWSTR),
-                        ("lpszClassName", wt.LPCWSTR), ("hIconSm", wt.HICON)]
-        hinst = k.GetModuleHandleW(None)
-        wc = WNDCLASSEXW(ctypes.sizeof(WNDCLASSEXW), 0, self._proc, 0, 0, hinst, None, None, None, None,
-                         "WvaLiquidGlass", None)
-        u.RegisterClassExW(ctypes.byref(wc))
-        u.CreateWindowExW.restype = wt.HWND
-        u.CreateWindowExW.argtypes = [wt.DWORD, wt.LPCWSTR, wt.LPCWSTR, wt.DWORD, ctypes.c_int, ctypes.c_int, ctypes.c_int,
-                                      ctypes.c_int, wt.HWND, wt.HMENU, wt.HINSTANCE, wt.LPVOID]
+    def __init__(self):
+        a = self.a = _win32()
+        wt = a["wt"]
+        self._proc = a["WNDPROC"](lambda hw, msg, wp, lp: a["DefWindowProcW"](hw, msg, wp, lp))
+        hinst = a["GetModuleHandleW"](None)
+        wc = a["WNDCLASSEXW"](ctypes.sizeof(a["WNDCLASSEXW"]), 0, self._proc, 0, 0, hinst, None, None, None, None,
+                              self.CLASS, None)
+        if not a["RegisterClassExW"](ctypes.byref(wc)) and ctypes.get_last_error() != 1410:  # 1410: already there
+            raise OSError(f"RegisterClassExW failed ({ctypes.get_last_error()})")
         # WS_EX_LAYERED | TOPMOST | TOOLWINDOW | NOACTIVATE | TRANSPARENT (clicks go through), WS_POPUP
-        self.hwnd = u.CreateWindowExW(0x80000 | 0x8 | 0x80 | 0x08000000 | 0x20, "WvaLiquidGlass", "", 0x80000000,
-                                      0, 0, 1, 1, None, None, hinst, None)
+        self.hwnd = a["CreateWindowExW"](0x80000 | 0x8 | 0x80 | 0x08000000 | 0x20, self.CLASS, "", 0x80000000,
+                                         0, 0, 1, 1, None, None, hinst, None)
         if not self.hwnd:
-            raise OSError("couldn't make the glass window")
-        u.SetWindowDisplayAffinity.argtypes = [wt.HWND, wt.DWORD]
-        self.excluded = bool(u.SetWindowDisplayAffinity(self.hwnd, 0x11))  # WDA_EXCLUDEFROMCAPTURE
-        u.ShowWindow(self.hwnd, 4)  # SW_SHOWNOACTIVATE (it's invisible until it gets an image)
+            raise OSError(f"CreateWindowExW failed ({ctypes.get_last_error()})")
+        self.excluded = bool(a["SetWindowDisplayAffinity"](self.hwnd, 0x11))  # WDA_EXCLUDEFROMCAPTURE
+        a["ShowWindow"](self.hwnd, 4)  # SW_SHOWNOACTIVATE (it's invisible until it gets an image)
         self.shown = False
         self.rect = (0, 0, 0, 0)
+        self.wt = wt
 
     def backdrop(self, x, y, w, h):
         """The screen under (x, y, w, h), without this window in it."""
@@ -351,39 +399,33 @@ class Window:
         return self.excluded or not self.shown
 
     def show(self, img, x, y, alpha=255):
-        """Put the RGBA image on screen at (x, y) with an overall opacity (0..255)."""
-        wt, u, g = self.wt, self.u, self.g
+        """Put the RGBA image on screen at (x, y) with an overall opacity (0..255). Raises if
+        Windows refuses (the pill then falls back to the black island)."""
+        a, wt = self.a, self.wt
         w, h = img.size
         data = img.convert("RGBa").tobytes("raw", "BGRa")
-
-        class BITMAPINFOHEADER(ctypes.Structure):
-            _fields_ = [("biSize", wt.DWORD), ("biWidth", wt.LONG), ("biHeight", wt.LONG), ("biPlanes", wt.WORD),
-                        ("biBitCount", wt.WORD), ("biCompression", wt.DWORD), ("biSizeImage", wt.DWORD),
-                        ("biXPelsPerMeter", wt.LONG), ("biYPelsPerMeter", wt.LONG), ("biClrUsed", wt.DWORD),
-                        ("biClrImportant", wt.DWORD)]
-
-        class BLENDFUNCTION(ctypes.Structure):
-            _fields_ = [("BlendOp", ctypes.c_ubyte), ("BlendFlags", ctypes.c_ubyte), ("SourceConstantAlpha", ctypes.c_ubyte),
-                        ("AlphaFormat", ctypes.c_ubyte)]
-        bih = BITMAPINFOHEADER(ctypes.sizeof(BITMAPINFOHEADER), w, -h, 1, 32, 0, 0, 0, 0, 0, 0)
-        screen = u.GetDC(None)
-        mem = g.CreateCompatibleDC(screen)
+        bih = a["BITMAPINFOHEADER"](ctypes.sizeof(a["BITMAPINFOHEADER"]), w, -h, 1, 32, 0, 0, 0, 0, 0, 0)
+        screen = a["GetDC"](None)
+        mem = a["CreateCompatibleDC"](screen)
         bits = ctypes.c_void_p()
-        g.CreateDIBSection.restype = wt.HBITMAP
-        g.CreateDIBSection.argtypes = [wt.HDC, ctypes.c_void_p, wt.UINT, ctypes.POINTER(ctypes.c_void_p), wt.HANDLE, wt.DWORD]
-        bmp = g.CreateDIBSection(screen, ctypes.byref(bih), 0, ctypes.byref(bits), None, 0)
+        bmp = a["CreateDIBSection"](screen, ctypes.byref(bih), 0, ctypes.byref(bits), None, 0)
         try:
+            if not bmp or not bits.value:
+                raise OSError(f"CreateDIBSection failed ({ctypes.get_last_error()})")
             ctypes.memmove(bits, data, len(data))
-            old = g.SelectObject(mem, bmp)
+            old = a["SelectObject"](mem, bmp)
             pos, size, src = wt.POINT(int(x), int(y)), wt.SIZE(w, h), wt.POINT(0, 0)
-            blend = BLENDFUNCTION(0, 0, max(0, min(255, int(alpha))), 1)  # AC_SRC_ALPHA
-            u.UpdateLayeredWindow(self.hwnd, screen, ctypes.byref(pos), ctypes.byref(size), mem, ctypes.byref(src), 0,
-                                  ctypes.byref(blend), 2)  # ULW_ALPHA
-            g.SelectObject(mem, old)
+            blend = a["BLENDFUNCTION"](0, 0, max(0, min(255, int(alpha))), 1)  # AC_SRC_ALPHA
+            ok = a["UpdateLayeredWindow"](self.hwnd, screen, ctypes.byref(pos), ctypes.byref(size), mem,
+                                          ctypes.byref(src), 0, ctypes.byref(blend), 2)  # ULW_ALPHA
+            a["SelectObject"](mem, old)
+            if not ok:
+                raise OSError(f"UpdateLayeredWindow failed ({ctypes.get_last_error()})")
         finally:
-            g.DeleteObject(bmp)
-            g.DeleteDC(mem)
-            u.ReleaseDC(None, screen)
+            if bmp:
+                a["DeleteObject"](bmp)
+            a["DeleteDC"](mem)
+            a["ReleaseDC"](None, screen)
         self.shown = alpha > 0
         self.rect = (int(x), int(y), w, h)
 
@@ -393,7 +435,7 @@ class Window:
         self.shown = False
 
     def on_top(self):
-        self.u.SetWindowPos(self.hwnd, -1, 0, 0, 0, 0, 0x1 | 0x2 | 0x10)
+        self.a["SetWindowPos"](self.hwnd, ctypes.c_void_p(-1 & 0xFFFFFFFFFFFFFFFF), 0, 0, 0, 0, 0x1 | 0x2 | 0x10)
 
 
 def now():

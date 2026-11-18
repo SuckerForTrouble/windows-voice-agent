@@ -151,7 +151,13 @@ class App:
     def open_settings(self):
         """Tray → Settings…: the same window; changes apply straight away."""
         def go():
+            from . import dialogs
             new = self._ask_settings(first_run=False)
+            if new is None and dialogs.last_error:
+                log.error("Settings didn't open: %s", dialogs.last_error)
+                self.tray.notify(f"Settings couldn't open ({dialogs.last_error}). Tray → Help → Open the settings "
+                                 "file to change it by hand; logs/dialog.log has the details.")
+                return
             if new:
                 todo = new.pop("_do", [])
                 self.apply_settings(new)

@@ -644,7 +644,18 @@ def _loop():
     def render():
         g = glass()
         if g is not None:
-            return render_glass(g)
+            try:
+                return render_glass(g)
+            except Exception:  # Windows wouldn't show the glass: the black island from here on
+                import logging
+                logging.getLogger("wva.osd").exception("liquid glass failed, using the black island")
+                state["glass_failed"] = True
+                try:
+                    g.hide()
+                except Exception:
+                    pass
+                state["alpha"], state["want"] = 0.0, ALPHA["island"]
+                return render()
         if state["glass"] is not None and state["glass"].shown:
             state["glass"].hide()  # switched away from the island
         w, h = pill.draw()
@@ -669,6 +680,17 @@ def _loop():
             root.attributes("-alpha", max(0.0, state["alpha"]))
 
     def poll():
+        """Messages in, then the next frame. Whatever goes wrong in one frame is logged and the
+        loop carries on: the pill and the tray panel (which runs here too) never stop for it."""
+        delay = 60
+        try:
+            delay = step()
+        except Exception:
+            import logging
+            logging.getLogger("wva.osd").exception("pill frame failed")
+        root.after(delay, poll)
+
+    def step():
         try:
             while True:
                 item = _q.get_nowait()
@@ -693,14 +715,13 @@ def _loop():
                 if not state["visible"]:
                     on_top()
                 state["visible"] = True
-                render()
-                if item["seconds"]:
+                if item["seconds"]:  # (set before drawing: a frame that fails still goes away in time)
                     state["hide"] = root.after(int(item["seconds"] * 1000), off)
+                render()
         except queue.Empty:
             pass
         if not state["visible"]:
-            root.after(60, poll)
-            return
+            return 60
         if time.time() - state["on_top"] > 0.5:
             on_top()  # a game that went topmost after us goes back under
         live = glass() is not None  # the glass follows what's behind it, so it's redrawn ~10 times a second anyway
@@ -711,7 +732,7 @@ def _loop():
             gone()
         elif moving or live:
             render()
-        root.after((33 if live else FRAME) if moving else (100 if live else 60), poll)
+        return (33 if live else FRAME) if moving else (100 if live else 60)
 
     root.after(60, poll)
     root.mainloop()
