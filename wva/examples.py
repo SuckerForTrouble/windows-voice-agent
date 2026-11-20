@@ -309,6 +309,18 @@ CASES = [
     ("never mind", ["never mind"]),
     ("no, that's wrong", ["no, that's wrong"]),
     ("you misheard me", ["no, that's wrong"]),
+    # The music bot in Discord (Jockie Music)
+    ("bot play blinding lights", ["bot play <song>"]),
+    ("jockie play tum hi ho", ["bot play <song>"]),
+    ("play kesariya with the bot", ["bot play <song>"]),
+    ("bot pe kesariya bajao", ["bot play <song>"]),
+    ("bot skip", ["bot skip | pause | resume | stop | queue"]),
+    ("bot pause", ["bot skip | pause | resume | stop | queue"]),
+    ("bot what's playing", ["bot skip | pause | resume | stop | queue"]),
+    ("bot leave", ["bot skip | pause | resume | stop | queue"]),
+    ("bot volume 50", ["bot volume <n>"]),
+    ("bot loop this song", ["bot loop song | queue | off"]),
+    ("bot skip to 5", ["bot skip to <n>"]),
     # Everyday extras
     ("what's 25 times 4", ["calculate <sum>"]),
     ("what is 15 percent of 200", ["calculate <sum>"]),

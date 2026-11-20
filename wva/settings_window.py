@@ -43,7 +43,7 @@ EXTRAS = [("voice_replies", "Spoken answers", "Hear the time, weather… as well
                                                    "(set the same keys in Discord → Settings → Keybinds first)")]
 KEYS = ("agent_key", "dictate_key", "model", "always_listen", "music_app", "movie_app", "browser", "voice_replies", "sounds",
         "start_with_windows", "unload_in_games", "auto_update", "mic", "dictate_language", "show_timing",
-        "discord_keybinds", "clips")
+        "discord_keybinds", "clips", "bot_prefix", "bot_channel")
 
 
 class Window:
@@ -132,6 +132,20 @@ class Window:
         """An action that isn't a setting: save what's chosen, close, and let the app run it."""
         self.todo.append(action)
         self._save()
+
+    def _entry(self, label, key, note="", width=26):
+        """A short text setting (the bot's prefix, a channel ID)."""
+        tk = self.tk
+        row = tk.Frame(self.page, bg=BG)
+        row.pack(fill="x", pady=4)
+        tk.Label(row, text=label, bg=BG, fg=INK, font=self.f["body"], width=16, anchor="w").pack(side="left")
+        var = tk.StringVar(value=str(self.v.get(key) or ""))
+        tk.Entry(row, textvariable=var, width=width, font=self.f["body"], bg=CARD, fg=INK, insertbackground=INK,
+                 relief="flat").pack(side="left", ipady=4)
+        var.trace_add("write", lambda *_: self.v.__setitem__(key, var.get().strip()))
+        if note:
+            tk.Label(row, text=note, bg=BG, fg=SOFT, font=self.f["small"], anchor="w", justify="left",
+                     wraplength=380).pack(side="left", padx=8)
 
     def _dropdown(self, label, options, key):
         """A list to pick from (microphones): (value, shown) each."""
@@ -336,6 +350,9 @@ class Window:
         self._segments("“Watch …”", MOVIES, "movie_app")
         self._segments("“Open browser”", BROWSERS, "browser")
         self._segments("“Clip that”", CLIPS, "clips")
+        self._entry("Music bot prefix", "bot_prefix", "“bot play …” sends this first: m! is Jockie Music", width=8)
+        self._entry("Bot channel ID", "bot_channel", "Right-click the channel → Copy Channel ID (Developer Mode on). "
+                    "The Vesktop plugin sends there in the background", width=24)
 
         self._section("Extras", "Small things to turn on or off.")
         for key, title, sub in EXTRAS:

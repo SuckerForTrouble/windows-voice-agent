@@ -119,7 +119,7 @@ class App:
 
     SETTINGS = ("agent_key", "dictate_key", "model", "always_listen", "call_word", "music_app", "movie_app", "browser",
                 "voice_replies", "sounds", "start_with_windows", "unload_in_games", "auto_update", "dictate_language",
-                "osd", "osd_style", "mic", "show_timing", "discord_keybinds", "clips")
+                "osd", "osd_style", "mic", "show_timing", "discord_keybinds", "clips", "bot_prefix", "bot_channel")
 
     def _ask_settings(self, first_run):
         import tempfile

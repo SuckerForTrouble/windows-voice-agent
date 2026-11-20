@@ -111,6 +111,8 @@ ALIASES = [
     (r"\bdown ?load(s|ed)?\b", r"download\1"), (r"\bun[ -]mute\b", "unmute"),
     (r"^((?:(?:hey|ok|okay|so) )?)(?:moot|mewt)\b", r"\1mute"), (r"^((?:(?:hey|ok|okay|so) )?)oven\b(?= \w)", r"\1open"),
     (r"\bphone ?link\b|\bfone link\b|\byour phone app\b", "phone link"),
+    (r"\b(?:jocky|jokey|joki|jockie's|jockey's|jackie|jacky|chocky|jokie)\b(?=,? (?:play|skip|pause|resume|stop|queue|"
+     r"volume|loop|repeat|leave|join|shuffle|what's|now|previous|back|lyrics|music))", "jockie"),
 ]
 # "Increased the volume", "Opened Spotify", "Closing Discord": a command verb heard in
 # another form. Only the first word of a command (natural() below; chains split first), so

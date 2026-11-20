@@ -227,6 +227,13 @@ PATTERNS = [
     (r"(?:battery|charge|charging) (?:kitni hai|kitna hai|kitni bachi hai|kitna bacha hai|batao|kitni)", "battery"),
     (r"(?:ram|memory) (?:kitni hai|kitna hai|kitni use ho rahi hai|batao)", "ram"),
     (r"(?:madad|help) (?:karo|chahiye|kar do)|kya kya (?:bol sakta hoon|kar sakte ho|kar sakta hai)", "help"),
+    # the music bot in Discord: "bot pe kesariya bajao", "kesariya bot pe chalao", "bot gaana skip karo"
+    (r"(?:bot|jockie|jockey)(?: pe| par| se| mein| me)? (.+?) (?:bajao|baja do|chalao|chala do|lagao|laga do|play karo)",
+     r"bot play \1"),
+    (r"(.+?) (?:bot|jockie|jockey) (?:pe|par|se|mein|me) (?:bajao|baja do|chalao|chala do|lagao|laga do|play karo)",
+     r"bot play \1"),
+    (rf"(?:bot|jockie|jockey)(?: pe| par| se)? (?:{SONG} )?(?:skip karo|skip kar do|agla|next karo|badlo)", "bot skip"),
+    (rf"(?:bot|jockie|jockey)(?: pe| par| se)? (?:{SONG} )?{STOP_V}", "bot pause"),
     # with a name in it (Hindi word order: the name first)
     (rf"(.+?) {OPEN_V}", r"open \1"),
     (rf"(.+?) {CLOSE_V}", r"close \1"),

@@ -6,6 +6,7 @@ import re
 from . import actions as a
 from . import audio as au
 from . import choices as ch
+from . import discordbot as db
 from . import extras as x
 from . import files as fl
 from . import handy as hd
@@ -108,6 +109,34 @@ rule(PH, "answer | decline the call (phone ringing)", "While a phone call rings,
      [PICK + r" (?:the |this |that )?call", r"(pick up|answer)(?: it| that)?"],
      lambda d: ph.answer() if d in ("answer", "accept", "pick up", "take", "get") else ph.decline(),
      wake=True, guard=lambda d: ph.ringing())
+BOT = r"(?:hey )?(?:the |my |our )?(?:music )?(?:bot|jockie(?: music)?|jockey(?: music)?|music bot)(?:,? (?:please|can you|could you))?,?"
+BOT_WORDS = {"skip": "skip", "next": "skip", "pause": "pause", "hold": "pause", "resume": "resume", "unpause": "resume",
+             "continue": "resume", "stop": "stop", "leave": "stop", "disconnect": "stop", "go away": "stop",
+             "queue": "queue", "show the queue": "queue", "now playing": "now", "what's playing": "now",
+             "what song is this": "now", "previous": "previous", "back": "previous", "go back": "previous",
+             "shuffle": "shuffle", "lyrics": "lyrics", "join": "join", "come here": "join", "join me": "join",
+             "join the call": "join", "autoplay": "autoplay"}
+rule(DC, "bot play <song>", "Your music bot in Discord (Jockie Music: m!play …) in the bot channel, in the background "
+     "with the Vesktop plugin",
+     [BOT + r" (?:play|put on|queue|add|queue up) (.+)",
+      r"(?:play|queue|put on|add) (.+?) (?:with|on|in|using|through) (?:the )?(?:music )?(?:bot|jockie|jockey)",
+      r"(?:play|queue) (.+?) (?:in|on) (?:the )?(?:discord|vc|call|voice chat|voice channel|server)"],
+     lambda q: db.bot("play", q), wake=True, free=True)
+rule(DC, "bot skip | pause | resume | stop | queue", "'bot skip', 'jockie pause', 'bot what's playing', 'bot leave'",
+     [BOT + r" (" + "|".join(sorted(BOT_WORDS, key=len, reverse=True)) + r")(?: (?:the |this )?(?:song|track|music|it|one))?",
+      r"(skip|pause|resume|stop) (?:the )?(?:song|music|track) (?:in|on) (?:the )?(?:discord|vc|call|voice chat|server)"],
+     lambda w: db.bot(BOT_WORDS[w]), wake=True)
+rule(DC, "bot volume <n>", "'bot volume 50'",
+     [BOT + r" (?:volume|set (?:the )?volume(?: to)?|volume to|turn (?:it|the volume) to) (.+?)(?: percent)?"],
+     lambda n: db.bot("volume", str(engine.num(n))), wake=True, guard=db.volume_ok)
+rule(DC, "bot loop song | queue | off", "'bot loop this song', 'bot loop the queue', 'bot stop looping'",
+     [BOT + r" (?:loop|repeat)(?: (?:this |the )?(song|track|queue|playlist|off))?",
+      BOT + r" (?:stop|no more|don't|do not) (loop|repeat)(?:ing)?(?: it)?"],
+     lambda what=None: db.bot({"queue": "loop queue", "playlist": "loop queue", "off": "loop off", "loop": "loop off",
+                               "repeat": "loop off"}.get(what or "song", "loop song")), wake=True)
+rule(DC, "bot skip to <n>", "'bot skip to 5': that track in the queue",
+     [BOT + r" (?:skip|jump|go) to (?:track |song |number )?(.+)"],
+     lambda n: db.bot("skip to", str(engine.num(n))), wake=True, guard=lambda n: engine.num(n) is not None)
 rule(DC, "answer the Discord call", "Ctrl+Enter in Discord",
      [r"(?:answer|accept|pick up|join) (?:the )?(?:discord )?call(?: on discord)?", r"(?:answer|pick up|accept) discord"],
      x.discord_answer)

@@ -186,6 +186,21 @@ every week or two.
   when that happens: answers are then **said out loud** (even with spoken answers off), and a command
   it didn't understand beeps. Want the pill? Switch the game to borderless in its video settings.
 
+## The music bot in Discord (Jockie Music)
+
+Say **"bot play kesariya"**, **"bot skip"**, **"bot pause"**, **"bot resume"**, **"bot what's playing"**,
+**"bot queue"**, **"bot volume 50"**, **"bot loop this song"**, **"bot skip to 5"** or **"bot leave"**
+("jockie …" works too, and Hinglish: "bot pe kesariya bajao"). It sends Jockie Music's command
+(`m!play kesariya`, `m!skip`…) to the bot channel as you, so Jockie answers like anything you type.
+
+- **With Vesktop and the bridge plugin** (`vesktop-plugin/`, see its README): it's sent in the
+  background, to the bot channel, while you stay in your game.
+- **Without it**: Discord comes forward for a moment, the command is typed into the channel that's
+  open there, and you're back.
+- Settings → Your apps: the bot's prefix (`m!`) and the bot channel's ID (right-click the channel →
+  Copy Channel ID, with Developer Mode on). Another bot's command names go in the settings file as
+  `"bot_commands": {"skip": "next"}`.
+
 ## ⚠️ Commands from Discord audio (dangerous, off by default)
 
 Tray → More options → **Commands from Discord audio**. While it's on, what your Discord call plays is
@@ -296,6 +311,7 @@ python3 -m wva --list                      # every command
 | `wva/actions.py`, `extras.py`, `system.py` | what commands do on Windows (Spotify, Discord, Stremio… in `extras`) |
 | `wva/apps.py` | open/close by name: Start menu, Store apps, Steam/Epic games, sites, process names, a browser by name |
 | `wva/phone.py` | Phone Link: answer / decline / hang up (UI Automation + its own keys), call, text, its pages |
+| `wva/discordbot.py`, `vesktop-plugin/` | music bot commands in Discord: through the Vesktop plugin in the background, else a flick |
 | `wva/phrases.py`, `handy.py` | other ways to say a command (English and Hinglish); sums, coin, dice, stopwatch, ping, translate |
 | `wva/listen.py`, `loopback.py` | always listening and call words; commands from Discord audio (WASAPI loopback) |
 | `wva/learn.py` | learning from retries, "did you mean?", "no, that's wrong", "forget that" |

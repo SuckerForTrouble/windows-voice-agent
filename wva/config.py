@@ -42,6 +42,12 @@ DEFAULTS = {
     "discord_deafen_keys": "ctrl+shift+alt+d",
     "clips": "nvidia",       # "clip that" = NVIDIA Instant Replay (Alt+F10) | "xbox" (Win+Alt+G)
     "doomscroll_seconds": 8,
+    # Music bot in Discord ("bot play …", discordbot.py): Jockie Music's prefix, and the channel
+    # most of the group uses (Settings → Your apps; right-click a channel → Copy Channel ID)
+    "bot_prefix": "m!",
+    "bot_channel": "1275456963358232634",
+    "bot_commands": {},      # another bot's command names: {"skip": "next", "stop": "dc"}
+    "bot_confirm": False,    # the pill says "Sent …" after each one
 }
 
 _cache = None

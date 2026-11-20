@@ -16,7 +16,7 @@ GROUP_INFO = {
     "Files & folders": ("📁", "Your newest download, any file by name, deep folders."),
     "Close & switch apps": ("🪟", "Close apps, even the ones hiding behind your game."),
     "Spotify": ("🎵", "Control Spotify from anywhere."),
-    "Discord": ("💬", "Mute, deafen, answer calls."),
+    "Discord": ("💬", "Mute, deafen, answer calls, and the music bot: “bot play …”, “bot skip”."),
     "Phone": ("📞", "Phone Link: answer or hang up phone calls, call, text."),
     "Stremio & watching": ("🎬", "Say a movie or show, it opens."),
     "Reels & Shorts": ("📱", "Scroll reels without touching anything."),

@@ -435,6 +435,49 @@ def test_liquid_glass():
     assert r > g + 60 and r > b + 60, (r, g, b)
 
 
+def test_music_bot():
+    """'bot play …' -> 'm!play …' to the bot channel: through the Vesktop plugin when it's there
+    (a fake one here, on 127.0.0.1 with the same secret check), else the flick."""
+    import json
+    import threading
+    from http.server import BaseHTTPRequestHandler, HTTPServer
+
+    from wva import config, discordbot, paths
+    assert discordbot.command("play", "blinding lights") == "m!play blinding lights"
+    assert discordbot.command("skip") == "m!skip" and discordbot.command("loop song") == "m!repeat current"
+    config._cache["bot_commands"] = {"skip": "next"}
+    assert discordbot.command("skip") == "m!next"
+    config._cache["bot_commands"] = {}
+    got = []
+
+    class H(BaseHTTPRequestHandler):
+        def do_POST(self):
+            body = json.loads(self.rfile.read(int(self.headers["Content-Length"])))
+            ok = self.headers.get("X-Token") == "secret"
+            if ok:
+                got.append(body)
+            self.send_response(202 if ok else 403)
+            self.end_headers()
+
+        def log_message(self, *a):
+            pass
+    srv = HTTPServer(("127.0.0.1", 0), H)
+    threading.Thread(target=srv.handle_request, daemon=True).start()
+    f = paths.DATA / "discord-bridge.json"
+    old = f.read_text(encoding="utf-8") if f.exists() else None
+    paths.ensure()
+    try:
+        f.write_text(json.dumps({"port": srv.server_address[1], "token": "secret"}), encoding="utf-8")
+        assert discordbot.through_plugin("1275456963358232634", "m!skip")
+        assert got == [{"channel": "1275456963358232634", "text": "m!skip"}], got
+        f.write_text(json.dumps({"port": srv.server_address[1], "token": "wrong"}), encoding="utf-8")
+        assert not discordbot.through_plugin("1275456963358232634", "m!skip"), "a wrong secret (and a closed port) fails"
+    finally:
+        srv.server_close()
+        f.unlink() if old is None else f.write_text(old, encoding="utf-8")
+    assert not discordbot.through_plugin("1275456963358232634", "m!skip"), "no plugin: falls back to the flick"
+
+
 def test_call_word():
     from wva.listen import call_word_ok, call_words, strip_call
     cases = [("Jarvis, open Spotify.", "jarvis", "open Spotify."), ("Hey Jarvis open spotify", "jarvis", "open spotify"),
