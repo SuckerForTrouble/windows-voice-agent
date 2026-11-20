@@ -20,11 +20,11 @@ const settings = definePluginSettings({
     },
 });
 
-let running = false;
+let generation = 0; // each start() begins a new loop; an older one stops at its next turn
 let sentAt: number[] = [];
 
-async function loop() {
-    while (running) {
+async function loop(mine: number) {
+    while (mine === generation) {
         let jobs: { channel: string; text: string; }[] = [];
         try {
             jobs = await Native.next();
@@ -34,14 +34,15 @@ async function loop() {
         }
         const allowed = settings.store.channels.split(",").map(s => s.trim()).filter(Boolean);
         for (const job of jobs) {
-            if (!running) return;
+            if (mine !== generation) return;
             if (allowed.length && !allowed.includes(job.channel)) continue;
             const now = Date.now();
             sentAt = sentAt.filter(t => now - t < 1000);
             if (sentAt.length >= 2) await new Promise(r => setTimeout(r, 1000));
             sentAt.push(Date.now());
             try {
-                sendMessage(job.channel, { content: job.text });
+                Promise.resolve(sendMessage(job.channel, { content: job.text }))
+                    .catch(e => console.error("[VoiceAgentBridge] Discord didn't send it", e));
             } catch (e) {
                 console.error("[VoiceAgentBridge] couldn't send", e);
             }
@@ -55,10 +56,9 @@ export default definePlugin({
     authors: [{ name: "profane", id: 0n }],
     settings,
     start() {
-        running = true;
-        loop();
+        loop(++generation);
     },
     stop() {
-        running = false;
+        generation++;
     },
 });

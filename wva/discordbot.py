@@ -31,8 +31,8 @@ _told = {"flick": False}
 def command(what, arg=""):
     """'play', 'blinding lights' -> 'm!play blinding lights'."""
     table = {**COMMANDS, **(config.get("bot_commands") or {})}
-    tpl = table.get(what, what)
-    body = tpl.format(arg.strip()) if "{}" in tpl else tpl
+    tpl = str(table.get(what, what))
+    body = tpl.replace("{}", arg.strip())  # (not .format: a bot's command may have its own braces)
     return (config.get("bot_prefix") or "m!") + body.strip()
 
 
@@ -47,11 +47,12 @@ def _bridge():
 def through_plugin(channel, text):
     """Hand it to the Vesktop plugin: True if it took it (it sends straight away)."""
     b = _bridge()
-    if not b or not b.get("port") or not b.get("token"):
-        return False
-    req = urllib.request.Request(f"http://127.0.0.1:{int(b['port'])}/send",
-                                 json.dumps({"channel": channel, "text": text}).encode(),
-                                 {"Content-Type": "application/json", "X-Token": str(b["token"])})
+    try:
+        port, token = int(b["port"]), str(b["token"])
+    except (TypeError, KeyError, ValueError):
+        return False  # no plugin running (or a damaged file): the flick instead
+    req = urllib.request.Request(f"http://127.0.0.1:{port}/send", json.dumps({"channel": channel, "text": text}).encode(),
+                                 {"Content-Type": "application/json", "X-Token": token})
     try:
         with urllib.request.urlopen(req, timeout=1.5) as r:
             return r.status in (200, 202)
@@ -59,14 +60,33 @@ def through_plugin(channel, text):
         return False
 
 
+def channel_id(value):
+    """The channel's ID from what's in Settings: the ID itself, or a pasted channel link
+    (https://discord.com/channels/<server>/<channel>: the last number is the channel)."""
+    ids = re.findall(r"\d{5,25}", str(value or ""))
+    return ids[-1] if ids else ""
+
+
 def by_flick(text):
-    """Discord to the front, type it into the open channel, Enter, back to where you were."""
+    """Discord to the front, (with a channel name in Settings: jump there with Ctrl+K), type it,
+    Enter, back to where you were. Without a name it goes to the channel that's open."""
     from .extras import send_to_app
+    name = str(config.get("bot_channel_name") or "").strip().lstrip("#")
 
     def typed():
         if not CTX.dry:
             time.sleep(0.15)
         keys("escape")       # out of any search or popup, into the message box
+        if name:
+            keys("ctrl+k")
+            if not CTX.dry:
+                time.sleep(0.35)
+            type_text(name)
+            if not CTX.dry:
+                time.sleep(0.6)
+            keys("enter")
+            if not CTX.dry:
+                time.sleep(0.6)
         type_text(text)
         if not CTX.dry:
             time.sleep(0.15)
@@ -75,7 +95,7 @@ def by_flick(text):
 
 
 def send(text):
-    channel = re.sub(r"\D", "", str(config.get("bot_channel") or ""))
+    channel = channel_id(config.get("bot_channel"))
     if CTX.dry:
         return log(f"to Discord channel {channel or '(the open one)'}: {text!r} "
                    "(the Vesktop plugin in the background, else a flick to Discord)")
@@ -83,8 +103,10 @@ def send(text):
         return ui.notify(f"Sent “{text}”") if config.get("bot_confirm") else None
     if by_flick(text) and not _told["flick"]:
         _told["flick"] = True
-        ui.notify(f"Sent “{text}” in the Discord channel that was open. With the Vesktop plugin it goes to "
-                  "the bot channel in the background (see the README)")
+        where = f"#{config.get('bot_channel_name').lstrip('#')}" if config.get("bot_channel_name") else \
+            "the Discord channel that was open"
+        ui.notify(f"Sent “{text}” in {where}. With the Vesktop plugin it goes to the bot channel in the "
+                  "background (see the README)")
 
 
 def bot(what, arg=""):

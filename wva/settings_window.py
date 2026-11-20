@@ -43,7 +43,7 @@ EXTRAS = [("voice_replies", "Spoken answers", "Hear the time, weather… as well
                                                    "(set the same keys in Discord → Settings → Keybinds first)")]
 KEYS = ("agent_key", "dictate_key", "model", "always_listen", "music_app", "movie_app", "browser", "voice_replies", "sounds",
         "start_with_windows", "unload_in_games", "auto_update", "mic", "dictate_language", "show_timing",
-        "discord_keybinds", "clips", "bot_prefix", "bot_channel")
+        "discord_keybinds", "clips", "bot_prefix", "bot_channel", "bot_channel_name")
 
 
 class Window:
@@ -353,6 +353,8 @@ class Window:
         self._entry("Music bot prefix", "bot_prefix", "“bot play …” sends this first: m! is Jockie Music", width=8)
         self._entry("Bot channel ID", "bot_channel", "Right-click the channel → Copy Channel ID (Developer Mode on). "
                     "The Vesktop plugin sends there in the background", width=24)
+        self._entry("Bot channel name", "bot_channel_name", "Without the plugin, Discord jumps to it (Ctrl+K) "
+                    "before typing; empty: the channel that's open", width=24)
 
         self._section("Extras", "Small things to turn on or off.")
         for key, title, sub in EXTRAS:

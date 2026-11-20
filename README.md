@@ -195,8 +195,8 @@ Say **"bot play kesariya"**, **"bot skip"**, **"bot pause"**, **"bot resume"**, 
 
 - **With Vesktop and the bridge plugin** (`vesktop-plugin/`, see its README): it's sent in the
   background, to the bot channel, while you stay in your game.
-- **Without it**: Discord comes forward for a moment, the command is typed into the channel that's
-  open there, and you're back.
+- **Without it**: Discord comes forward for a moment, jumps to the channel named in Settings → Your
+  apps → Bot channel name (Ctrl+K; empty: the channel that's open), the command is typed, and you're back.
 - Settings → Your apps: the bot's prefix (`m!`) and the bot channel's ID (right-click the channel →
   Copy Channel ID, with Developer Mode on). Another bot's command names go in the settings file as
   `"bot_commands": {"skip": "next"}`.

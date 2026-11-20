@@ -447,7 +447,12 @@ def test_music_bot():
     assert discordbot.command("skip") == "m!skip" and discordbot.command("loop song") == "m!repeat current"
     config._cache["bot_commands"] = {"skip": "next"}
     assert discordbot.command("skip") == "m!next"
+    config._cache["bot_commands"] = {"lyrics": "lyrics {song} {}"}
+    assert discordbot.command("lyrics", "kesariya") == "m!lyrics {song} kesariya", "a bot's own braces stay"
     config._cache["bot_commands"] = {}
+    assert discordbot.channel_id("1275456963358232634") == "1275456963358232634"
+    assert discordbot.channel_id("https://discord.com/channels/987654321098765432/1275456963358232634") == "1275456963358232634"
+    assert discordbot.channel_id("") == "" and discordbot.channel_id(None) == ""
     got = []
 
     class H(BaseHTTPRequestHandler):
@@ -476,6 +481,11 @@ def test_music_bot():
         srv.server_close()
         f.unlink() if old is None else f.write_text(old, encoding="utf-8")
     assert not discordbot.through_plugin("1275456963358232634", "m!skip"), "no plugin: falls back to the flick"
+    try:
+        f.write_text('{"port": "x"', encoding="utf-8")
+        assert not discordbot.through_plugin("1275456963358232634", "m!skip"), "a damaged file: the flick, no crash"
+    finally:
+        f.unlink(missing_ok=True) if old is None else f.write_text(old, encoding="utf-8")
 
 
 def test_call_word():

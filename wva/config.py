@@ -46,6 +46,7 @@ DEFAULTS = {
     # most of the group uses (Settings → Your apps; right-click a channel → Copy Channel ID)
     "bot_prefix": "m!",
     "bot_channel": "1275456963358232634",
+    "bot_channel_name": "",  # without the Vesktop plugin: Ctrl+K to this channel first (else the open one)
     "bot_commands": {},      # another bot's command names: {"skip": "next", "stop": "dc"}
     "bot_confirm": False,    # the pill says "Sent …" after each one
 }
